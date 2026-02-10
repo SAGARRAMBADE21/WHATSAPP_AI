@@ -1,0 +1,36 @@
+# Environment Variables
+.env
+
+# Dependencies
+node_modules/
+
+# Build Output
+dist/
+
+# Authentication & Sessions
+auth/
+*.session
+*.session-journal
+
+# Memory Data
+data/
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TypeScript
+*.tsbuildinfo
+
+# Testing
+coverage/

@@ -1,0 +1,29 @@
+{
+    "name": "workspace-navigator",
+    "version": "1.0.0",
+    "description": "WhatsApp-based AI Assistant for Google Workspace",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "start": "node dist/index.js",
+        "dev": "ts-node src/index.ts",
+        "dev:watch": "nodemon --exec ts-node src/index.ts"
+    },
+    "dependencies": {
+        "@whiskeysockets/baileys": "^6.7.9",
+        "chalk": "^5.6.2",
+        "dotenv": "^16.4.7",
+        "googleapis": "^144.0.0",
+        "openai": "^6.18.0",
+        "pino": "^9.5.0",
+        "qrcode-terminal": "^0.12.0",
+        "uuid": "^11.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^22.10.0",
+        "@types/uuid": "^10.0.0",
+        "nodemon": "^3.1.9",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.7.0"
+    }
+}
