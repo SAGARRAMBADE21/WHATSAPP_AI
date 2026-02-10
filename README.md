@@ -1,4 +1,4 @@
-# 🚀 Workspace Navigator
+# Workspace Navigator
 
 **AI-Powered Google Workspace Assistant via WhatsApp**
 
@@ -8,24 +8,24 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [Features](#-features)
-- [Architecture](#-architecture)
-- [Tech Stack](#-tech-stack)
-- [Prerequisites](#-prerequisites)
-- [Installation](#-installation)
-- [Configuration](#-configuration)
-- [Usage](#-usage)
-- [Available Commands](#-available-commands)
-- [Project Structure](#-project-structure)
-- [How It Works](#-how-it-works)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Tech Stack](#tech-stack)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+- [Available Commands](#available-commands)
+- [Project Structure](#project-structure)
+- [How It Works](#how-it-works)
 
 ---
 
-## ✨ Features
+## Features
 
-### 📧 **Gmail Management**
+### Gmail Management
 - Send emails with natural language commands
 - Create and manage drafts
 - Search emails using Gmail search syntax
@@ -33,27 +33,27 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 - Delete/archive messages
 - Add labels and organize inbox
 
-### 📅 **Calendar Operations**
+### Calendar Operations
 - Create events with smart date parsing
 - List upcoming events
 - Update existing events
 - Delete events
 - Handle recurring events
 
-### 📁 **Google Drive**
+### Google Drive
 - Search for files
 - Share files with specific people
 - List folder contents
 - Create folders
 - Delete files
 
-### 📊 **Google Sheets**
+### Google Sheets
 - Read data from spreadsheets
 - Write data to cells or ranges
 - Update individual cells
 - Append new rows
 
-### 🧠 **Intelligent Features**
+### Intelligent Features
 - **Natural Language Understanding**: Uses OpenAI's GPT-4 to interpret casual requests
 - **Context Awareness**: Maintains conversation history for follow-up questions
 - **Memory System**: 
@@ -65,7 +65,7 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ![System Architecture](./doc/architecture_diagram.png)
 
@@ -106,7 +106,7 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Category | Technology |
 |----------|-----------|
@@ -122,7 +122,7 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 
 ---
 
-## 📦 Prerequisites
+## Prerequisites
 
 Before you begin, ensure you have:
 
@@ -151,7 +151,7 @@ Before you begin, ensure you have:
 
 ---
 
-## 🚀 Installation
+## Installation
 
 ### 1. Clone the Repository
 
@@ -207,7 +207,7 @@ npm run build
 
 ---
 
-## ⚙️ Configuration
+## Configuration
 
 ### Google OAuth Setup
 
@@ -252,7 +252,7 @@ ALLOWED_NUMBERS=
 
 ---
 
-## 🎮 Usage
+## Usage
 
 ### Quick Start
 
@@ -305,7 +305,7 @@ Send email to john@example.com with subject "Meeting Tomorrow" and body "Let's m
 
 ---
 
-## 📝 Available Commands
+## Available Commands
 
 ### Gmail Commands
 
@@ -347,7 +347,7 @@ Send email to john@example.com with subject "Meeting Tomorrow" and body "Let's m
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 whatsapp_slack/
@@ -393,7 +393,7 @@ whatsapp_slack/
 
 ---
 
-## 🔍 How It Works
+## How It Works
 
 ### Message Flow
 
@@ -436,7 +436,7 @@ whatsapp_slack/
    - Saves to memory
    - Sends WhatsApp reply:
    ```
-   ✅ Email sent successfully to alice@example.com
+   Email sent successfully to alice@example.com
    Subject: "Report"
    ```
 
