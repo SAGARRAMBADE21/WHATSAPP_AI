@@ -20,7 +20,6 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 - [Available Commands](#-available-commands)
 - [Project Structure](#-project-structure)
 - [How It Works](#-how-it-works)
-- [Security & Privacy](#-security--privacy)
 
 ---
 
@@ -458,43 +457,6 @@ whatsapp_slack/
 - Tool call history
 - Frequently contacted emails
 - Semantic search for relevant context
-
----
-
-## 🔒 Security & Privacy
-
-### Authentication
-- **WhatsApp**: Multi-file auth state (Baileys)
-- **Google**: OAuth 2.0 with automatic token refresh
-- **Access Control**: Optional phone number whitelist
-
-### Data Storage
-- **Local Only**: All data stored locally on your machine
-- **No Cloud Storage**: Authentication tokens and memory database stay on your device
-- **Encrypted Transit**: All API calls use HTTPS/TLS
-
-### Best Practices
-1. Never share your `.env` file
-2. Keep `auth/` directory private
-3. Regularly rotate API keys
-4. Review Google OAuth permissions periodically
-5. Use `ALLOWED_NUMBERS` in production
-
-### Gitignore Protection
-The following sensitive files are automatically excluded:
-- `.env` (API keys and secrets)
-- `auth/` (WhatsApp and Google tokens)
-- `data/` (Memory database)
-- `*.log` (Logs may contain sensitive info)
-
----
-
-## 🙏 Acknowledgments
-
-- [Baileys](https://github.com/WhiskeySockets/Baileys) - WhatsApp Web API
-- [OpenAI](https://openai.com/) - GPT-4 language model
-- [Google](https://developers.google.com/) - Workspace APIs
-- [Pino](https://getpino.io/) - Fast logging library
 
 ---
 
