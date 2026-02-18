@@ -54,7 +54,7 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 - Append new rows
 
 ### Intelligent Features
-- **Natural Language Understanding**: Uses OpenAI's GPT-4 to interpret casual requests
+- **Natural Language Understanding**: Uses OpenAI's GPT-5.1 to interpret casual requests
 - **Context Awareness**: Maintains conversation history for follow-up questions
 - **Memory System**: 
   - Short-term: Recent conversation context
@@ -84,7 +84,7 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
    - Manages conversation flow
 
 3. **NLP Engine** (`src/nlp/engine.ts`)
-   - Integrates with OpenAI GPT-4
+   - Integrates with OpenAI GPT-5.1
    - Parses user intent from natural language
    - Generates structured tool calls
    - Returns clarification requests when needed
@@ -112,7 +112,7 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 |----------|-----------|
 | **Runtime** | Node.js (v18+) |
 | **Language** | TypeScript |
-| **AI/NLP** | OpenAI GPT-4o |
+| **AI/NLP** | OpenAI GPT-5.1 |
 | **WhatsApp** | @whiskeysockets/baileys |
 | **Google APIs** | googleapis (v144+) |
 | **Database** | SQLite (better-sqlite3) |
@@ -179,7 +179,7 @@ Edit `.env` with your credentials:
 ```env
 # OpenAI Configuration
 OPENAI_API_KEY=sk-proj-...your-key-here
-OPENAI_MODEL=gpt-4o
+OPENAI_MODEL=gpt-5.1
 
 # Google OAuth Configuration
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com

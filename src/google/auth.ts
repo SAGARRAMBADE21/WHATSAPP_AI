@@ -62,16 +62,19 @@ export class GoogleAuthManager {
    */
   getAuthUrl(state?: string): string {
     const authParams: any = {
+      response_type: 'code',
       access_type: 'offline',
       scope: [...config.google.scopes],
       prompt: 'consent',
     };
-    
+
     if (state) {
       authParams.state = state;
     }
-    
-    return this.oauth2Client.generateAuthUrl(authParams);
+
+    const url = this.oauth2Client.generateAuthUrl(authParams);
+    console.log(chalk.cyan(`[OAuth] Generated auth URL (${url.length} chars)`));
+    return url;
   }
 
   private async authorizeInteractive(): Promise<boolean> {

@@ -28,7 +28,7 @@ export class WhatsAppClient {
     constructor(agent: AgentCore, userManager: UserManager) {
         this.agent = agent;
         this.userManager = userManager;
-        this.logger = pino({ level: config.logLevel });
+        this.logger = pino({ level: 'silent' });
     }
 
     async start(): Promise<void> {
@@ -45,6 +45,7 @@ export class WhatsAppClient {
             printQRInTerminal: false,  // We'll handle QR display ourselves
             browser: ['Workspace Navigator', 'Chrome', '120.0'],
             generateHighQualityLinkPreview: false,
+            retryRequestDelayMs: 250,
         });
 
         // Handle connection updates
@@ -97,6 +98,27 @@ export class WhatsAppClient {
             for (const msg of messages) {
                 await this.handleIncomingMessage(msg);
             }
+        });
+
+        // Handle decryption errors gracefully (PreKeyError, SessionError)
+        // These are normal during first sync or key rotation and are non-fatal
+        process.removeAllListeners('unhandledRejection');
+        process.on('unhandledRejection', (reason: any) => {
+            if (reason instanceof Error) {
+                const errName = reason.name || '';
+                const errMsg = reason.message || '';
+                const isDecryptError =
+                    errName === 'PreKeyError' ||
+                    errName === 'SessionError' ||
+                    errMsg.includes('Invalid PreKey ID') ||
+                    errMsg.includes('failed to decrypt') ||
+                    errMsg.includes('No matching sessions');
+                if (isDecryptError) {
+                    // Silently ignore — these are handled internally by Baileys
+                    return;
+                }
+            }
+            console.error(chalk.red('[Unhandled Rejection]'), reason);
         });
     }
 

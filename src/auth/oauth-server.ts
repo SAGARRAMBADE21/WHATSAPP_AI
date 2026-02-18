@@ -2,6 +2,7 @@ import http from 'http';
 import { URL } from 'url';
 import path from 'path';
 import fs from 'fs';
+import { Server as SocketIOServer } from 'socket.io';
 import { UserManager } from './user-manager';
 import chalk from 'chalk';
 
@@ -24,6 +25,7 @@ const MIME_TYPES: Record<string, string> = {
 
 export class OAuthCallbackServer {
     private server: http.Server | null = null;
+    private io: SocketIOServer | null = null;
     private userManager: UserManager;
     private port: number = 3000;
 
@@ -37,6 +39,22 @@ export class OAuthCallbackServer {
             this.server = http.createServer(async (req, res) => {
                 try {
                     const url = new URL(req.url!, `http://localhost:${this.port}`);
+
+                    // ── Auth start redirect (short URL for WhatsApp) ──
+                    if (url.pathname === '/auth/start') {
+                        const sessionId = url.searchParams.get('session');
+                        if (!sessionId) {
+                            res.writeHead(400, { 'Content-Type': 'text/html' });
+                            res.end('<h1>400 - Missing session parameter</h1>');
+                            return;
+                        }
+                        console.log(chalk.cyan(`[OAuth] Redirect request for session: ${sessionId}`));
+                        const oauthUrl = this.userManager.generateAuthUrl(sessionId);
+                        console.log(chalk.cyan(`[OAuth] Redirecting to Google OAuth (${oauthUrl.length} chars)`));
+                        res.writeHead(302, { 'Location': oauthUrl });
+                        res.end();
+                        return;
+                    }
 
                     // ── Serve landing page and static files ──
                     if (!url.pathname.includes('oauth2callback')) {
@@ -114,8 +132,13 @@ export class OAuthCallbackServer {
                 }
             });
 
+            // Attach Socket.IO to the HTTP server
+            this.io = new SocketIOServer(this.server, {
+                cors: { origin: '*', methods: ['GET', 'POST'] },
+            });
+
             this.server.listen(this.port, '0.0.0.0', () => {
-                console.log(chalk.green(`   ✓ OAuth callback server running on http://localhost:${this.port}`));
+                console.log(chalk.green(`   ✓ Server running on http://localhost:${this.port}`));
                 resolve();
             });
 
@@ -333,7 +356,15 @@ export class OAuthCallbackServer {
     stop(): void {
         if (this.server) {
             this.server.close();
-            console.log(chalk.yellow('   ⚠ OAuth callback server stopped'));
+            console.log(chalk.yellow('   ⚠ Server stopped'));
         }
+    }
+
+    getIO(): SocketIOServer | null {
+        return this.io;
+    }
+
+    getServer(): http.Server | null {
+        return this.server;
     }
 }

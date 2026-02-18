@@ -69,7 +69,7 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
         try {
             console.log(`[NLP] Calling OpenAI API with model: ${config.openai.model}`);
             const startTime = Date.now();
-            
+
             const response = await this.client.chat.completions.create({
                 model: config.openai.model,
                 messages: [
@@ -77,7 +77,7 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
                     ...messages
                 ],
                 temperature: 0.7,
-                max_tokens: 2048,
+                max_completion_tokens: 4096,
             });
 
             const elapsed = Date.now() - startTime;

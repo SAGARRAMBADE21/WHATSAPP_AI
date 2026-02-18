@@ -6,7 +6,7 @@ dotenv.config();
 export const config = {
     openai: {
         apiKey: process.env.OPENAI_API_KEY || '',
-        model: process.env.OPENAI_MODEL || 'gpt-4o',
+        model: process.env.OPENAI_MODEL || 'gpt-5.1',
     },
     google: {
         clientId: process.env.GOOGLE_CLIENT_ID || '',

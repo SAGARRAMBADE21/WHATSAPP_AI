@@ -1019,41 +1019,81 @@
 
             <div class="divider"></div>
 
-            <!-- QR -->
+            <!-- Connect -->
             <section id="connect">
                 <div class="tag reveal" style="display:block;text-align:center">Connect</div>
-                <h2 class="section-heading reveal d1" style="text-align:center">Start now.</h2>
-                <p class="section-desc reveal d2" style="text-align:center;margin:16px auto 0;max-width:440px">
-                    Scan with WhatsApp to begin chatting with your AI workspace assistant
+                <h2 class="section-heading reveal d1" style="text-align:center">Connect your WhatsApp.</h2>
+                <p class="section-desc reveal d2" style="text-align:center;margin:16px auto 0;max-width:500px">
+                    Link your WhatsApp to manage your Google Workspace with AI. Your own private assistant.
                 </p>
 
                 <div style="text-align:center">
                     <div class="qr-card reveal d3">
-                        <div class="qr-box">
-                            <img id="qr-img"
-                                src="https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=https%3A%2F%2Fwa.me%2F917620970621%3Ftext%3DHi&bgcolor=ffffff&color=0a0a0a&format=svg"
-                                alt="Scan to chat on WhatsApp" width="220" height="220"
-                                style="border-radius:6px; display:block;">
+                        <!-- Step 1: Start Button -->
+                        <div id="connect-start">
+                            <div style="font-size:48px;margin-bottom:16px">📱</div>
+                            <div class="qr-title">Connect Your WhatsApp</div>
+                            <div class="qr-sub" style="margin-bottom:20px">Link your WhatsApp account to get started
+                            </div>
+                            <button id="btn-connect" onclick="startWhatsAppConnect()" style="
+                                background: var(--orange);
+                                color: #fff;
+                                border: none;
+                                padding: 14px 36px;
+                                border-radius: 10px;
+                                font-size: 16px;
+                                font-weight: 600;
+                                cursor: pointer;
+                                transition: all 0.3s;
+                                font-family: inherit;
+                            ">Connect WhatsApp →</button>
                         </div>
-                        <div class="qr-title">Scan with WhatsApp</div>
-                        <div class="qr-sub">Open WhatsApp → Camera → Point at QR</div>
-                        <div class="qr-number">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                <path
-                                    d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-                            </svg>
-                            +91 76209 70621
+
+                        <!-- Step 2: QR Code -->
+                        <div id="connect-qr" style="display:none">
+                            <div class="qr-box" style="position:relative">
+                                <img id="qr-img" width="260" height="260"
+                                    style="border-radius:8px;background:#fff;display:block" alt="Scan QR with WhatsApp">
+                                <div id="qr-loading"
+                                    style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.9);border-radius:8px">
+                                    <div style="text-align:center">
+                                        <div class="loader-spinner"
+                                            style="width:32px;height:32px;border:3px solid #eee;border-top:3px solid var(--orange);border-radius:50%;animation:spin 1s linear infinite;margin:0 auto 8px">
+                                        </div>
+                                        <div style="color:#333;font-size:13px">Generating QR...</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="qr-title" style="margin-top:16px">Scan with WhatsApp</div>
+                            <div class="qr-sub">Open WhatsApp → Linked Devices → Link a Device</div>
+                            <div id="qr-timer"
+                                style="color:var(--orange);font-size:13px;margin-top:8px;font-weight:600"></div>
                         </div>
-                        <div class="qr-list">
+
+                        <!-- Step 3: Connected -->
+                        <div id="connect-success" style="display:none">
+                            <div style="font-size:48px;margin-bottom:12px">✅</div>
+                            <div class="qr-title" style="color:#34A853">WhatsApp Connected!</div>
+                            <div id="connected-phone" style="color:var(--text-muted);font-size:14px;margin:8px 0"></div>
+                            <div class="qr-sub" style="margin-top:8px">Now send <strong
+                                    style="color:var(--orange)">/register</strong> in your WhatsApp to connect Google
+                                Workspace</div>
+                        </div>
+
+                        <!-- Steps -->
+                        <div class="qr-list" style="margin-top:20px">
                             <div class="qr-item">
-                                <div class="qr-no">1</div> Scan QR or message the number above
+                                <div class="qr-no" id="step-1-no">1</div>
+                                <span id="step-1-text">Click "Connect WhatsApp" above</span>
                             </div>
                             <div class="qr-item">
-                                <div class="qr-no">2</div> Send <strong style="color:var(--orange)">/register</strong>
-                                to connect Google
+                                <div class="qr-no" id="step-2-no">2</div>
+                                <span id="step-2-text">Scan QR with WhatsApp</span>
                             </div>
                             <div class="qr-item">
-                                <div class="qr-no">3</div> Start chatting — ask anything!
+                                <div class="qr-no" id="step-3-no">3</div>
+                                <span id="step-3-text">Send <strong style="color:var(--orange)">/register</strong> to
+                                    connect Google</span>
                             </div>
                         </div>
                     </div>
@@ -1106,7 +1146,107 @@
         </div>
     </div>
 
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+
     <script>
+        let socket = null;
+        let currentSessionId = null;
+
+        function startWhatsAppConnect() {
+            const btn = document.getElementById('btn-connect');
+            btn.textContent = 'Connecting...';
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+
+            // Check for existing session
+            currentSessionId = localStorage.getItem('wn_session_id');
+
+            // Connect to Socket.IO
+            socket = io();
+
+            socket.on('connect', () => {
+                console.log('Socket connected:', socket.id);
+
+                // Show QR step
+                document.getElementById('connect-start').style.display = 'none';
+                document.getElementById('connect-qr').style.display = 'block';
+
+                // Update step indicators
+                document.getElementById('step-1-no').style.background = '#34A853';
+                document.getElementById('step-1-text').innerHTML = '✓ Connected to server';
+
+                // Request session
+                if (currentSessionId) {
+                    socket.emit('restore-session', { sessionId: currentSessionId });
+                } else {
+                    socket.emit('create-session', {});
+                }
+            });
+
+            socket.on('qr-code', (data) => {
+                console.log('QR received for session:', data.sessionId);
+                currentSessionId = data.sessionId;
+                localStorage.setItem('wn_session_id', data.sessionId);
+
+                // Set the QR image directly (server sends data URL)
+                const qrImg = document.getElementById('qr-img');
+                qrImg.src = data.qr;
+                qrImg.onload = () => {
+                    document.getElementById('qr-loading').style.display = 'none';
+                    document.getElementById('step-2-no').style.background = 'var(--orange)';
+                    document.getElementById('step-2-text').innerHTML = '<strong>Scan the QR code now!</strong>';
+                };
+            });
+
+            socket.on('session-status', (data) => {
+                console.log('Session status:', data);
+
+                if (data.status === 'connected') {
+                    // Success!
+                    document.getElementById('connect-qr').style.display = 'none';
+                    document.getElementById('connect-success').style.display = 'block';
+                    document.getElementById('connected-phone').textContent =
+                        data.phoneNumber ? `Phone: +${data.phoneNumber}` : '';
+
+                    // Update steps
+                    document.getElementById('step-2-no').style.background = '#34A853';
+                    document.getElementById('step-2-text').innerHTML = '✓ WhatsApp connected';
+                    document.getElementById('step-3-no').style.background = 'var(--orange)';
+                    document.getElementById('step-3-text').innerHTML = '<strong>Send /register in WhatsApp now!</strong>';
+
+                    localStorage.setItem('wn_session_id', data.sessionId);
+                }
+
+                if (data.status === 'logged_out') {
+                    localStorage.removeItem('wn_session_id');
+                    currentSessionId = null;
+                    resetConnectUI();
+                }
+            });
+
+            socket.on('session-error', (data) => {
+                console.error('Session error:', data);
+                btn.textContent = 'Retry Connection →';
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            });
+
+            socket.on('disconnect', () => {
+                console.log('Socket disconnected');
+            });
+        }
+
+        function resetConnectUI() {
+            document.getElementById('connect-start').style.display = 'block';
+            document.getElementById('connect-qr').style.display = 'none';
+            document.getElementById('connect-success').style.display = 'none';
+            document.getElementById('qr-loading').style.display = 'flex';
+            const btn = document.getElementById('btn-connect');
+            btn.textContent = 'Connect WhatsApp →';
+            btn.disabled = false;
+            btn.style.opacity = '1';
+        }
+
         // ── Scroll Reveal ──
         const obs = new IntersectionObserver(entries => {
             entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
