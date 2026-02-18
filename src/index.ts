@@ -99,7 +99,8 @@ async function main(): Promise<void> {
     const oauthServer = new OAuthCallbackServer(userManager);
     try {
         await oauthServer.start();
-        console.log(chalk.green('   ✓ OAuth server ready to handle registrations\n'));
+        console.log(chalk.green('   ✓ OAuth server ready to handle registrations'));
+        console.log(chalk.cyan('   🌐 Landing page: http://localhost:3000\n'));
     } catch (error: any) {
         console.log(chalk.bold.red('\n   ✖ Failed to start OAuth server'));
         console.log(chalk.gray(`   → ${error.message}`));
