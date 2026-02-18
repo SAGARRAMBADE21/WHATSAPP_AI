@@ -1,5 +1,6 @@
 import { config } from './config';
-import { GoogleAuthManager } from './google/auth';
+import { UserManager } from './auth/user-manager';
+import { OAuthCallbackServer } from './auth/oauth-server';
 import { NLPEngine } from './nlp/engine';
 import { AgentCore } from './agent/core';
 import { ToolRegistry } from './tools/registry';
@@ -9,6 +10,8 @@ import { createGmailTools } from './tools/gmail';
 import { createCalendarTools } from './tools/calendar';
 import { createDriveTools } from './tools/drive';
 import { createSheetsTools } from './tools/sheets';
+import { createDocsTools } from './tools/docs';
+import { createClassroomTools } from './tools/classroom';
 import chalk from 'chalk';
 
 async function main(): Promise<void> {
@@ -16,13 +19,13 @@ async function main(): Promise<void> {
     console.clear();
 
     // Stylish banner
-    console.log(chalk.bold.cyan('\n╔═══════════════════════════════════════════════════╗'));
-    console.log(chalk.bold.cyan('║') + chalk.bold.white('                                                   ') + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + chalk.bold.magenta('   🚀 Workspace Navigator') + '                         ' + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + chalk.gray('   AI Assistant for Google Workspace via WhatsApp  ') + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + chalk.bold.white('                                                   ') + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('╚═══════════════════════════════════════════════════╝'));
-    console.log(chalk.gray('   v1.0.0 | Powered by OpenAI\n'));
+    console.log(chalk.bold.cyan('\n╔═════════════════════════════════════════════════════════╗'));
+    console.log(chalk.bold.cyan('║') + chalk.bold.white('                                                         ') + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + chalk.bold.magenta('   🚀 Workspace Navigator') + chalk.bold.yellow(' (Multi-User)') + '              ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + chalk.gray('   AI Assistant for Google Workspace via WhatsApp        ') + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + chalk.bold.white('                                                         ') + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('╚═════════════════════════════════════════════════════════╝'));
+    console.log(chalk.gray('   v2.0.0 | Multi-Tenant | Powered by OpenAI\n'));
 
     // ── Validate Configuration ──
     console.log(chalk.bold.yellow('⚙️  Validating Configuration...'));
@@ -36,23 +39,34 @@ async function main(): Promise<void> {
         console.log(chalk.gray('   → Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env\n'));
         process.exit(1);
     }
+    if (!config.mongodb.uri) {
+        console.log(chalk.bold.red('   ✖ MongoDB URI is required'));
+        console.log(chalk.gray('   → Set MONGODB_URI in .env\n'));
+        process.exit(1);
+    }
     console.log(chalk.green('   ✓ Configuration valid\n'));
 
-    // ── Step 1: Google Authentication ──
-    console.log(chalk.bold.blue('━━━ STEP 1/4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
-    console.log(chalk.bold('🔐 Google Authentication'));
-    console.log(chalk.gray('   Connecting to Google Workspace...\n'));
+    // ── Step 1: MongoDB Connection ──
+    console.log(chalk.bold.blue('━━━ STEP 1/4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.bold('💾 Connecting to MongoDB'));
+    console.log(chalk.gray('   Initializing multi-user database...\n'));
 
-    const googleAuth = new GoogleAuthManager();
-    const authSuccess = await googleAuth.initialize();
-    if (!authSuccess) {
-        console.log(chalk.bold.red('\n   ✖ Google authentication failed'));
-        console.log(chalk.gray('   → Please check your credentials and try again\n'));
+    const userManager = new UserManager(config.mongodb.uri, config.mongodb.dbName);
+    const dbConnected = await userManager.initialize();
+    if (!dbConnected) {
+        console.log(chalk.bold.red('\n   ✖ MongoDB connection failed'));
+        console.log(chalk.gray('   → Check MONGODB_URI in .env'));
+        console.log(chalk.yellow('   💡 For local: mongodb://localhost:27017'));
+        console.log(chalk.yellow('   💡 For Atlas: mongodb+srv://user:pass@cluster.mongodb.net\n'));
         process.exit(1);
     }
 
+    // Display user statistics
+    const stats = await userManager.getUserStats();
+    console.log(chalk.cyan(`   📊 Users: ${stats.total} total, ${stats.active_today} active today, ${stats.pending} pending`));
+
     // ── Step 2: Initialize Components ──
-    console.log(chalk.bold.blue('\n━━━ STEP 2/4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.bold.blue('\n━━━ STEP 2/4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
     console.log(chalk.bold('⚡ Initializing AI Components'));
     console.log(chalk.gray('   Loading NLP engine, tools, and memory...\n'));
 
@@ -63,58 +77,58 @@ async function main(): Promise<void> {
     console.log(chalk.gray('   ▸ Tool Registry') + chalk.green(' ✓'));
 
     const memoryManager = new MemoryManager();
+    await memoryManager.initialize(userManager.getDb());
     console.log(chalk.gray('   ▸ Memory Manager') + chalk.green(' ✓'));
 
-    // Register all tools
-    const authClient = googleAuth.getClient();
-    console.log(chalk.gray('\n   Registering workspace tools...'));
-
-    const gmailTools = createGmailTools(authClient);
-    console.log(chalk.gray('   ▸ Gmail') + chalk.cyan(` (${gmailTools.length} tools)`) + chalk.green(' ✓'));
-
-    const calendarTools = createCalendarTools(authClient);
-    console.log(chalk.gray('   ▸ Calendar') + chalk.cyan(` (${calendarTools.length} tools)`) + chalk.green(' ✓'));
-
-    const driveTools = createDriveTools(authClient);
-    console.log(chalk.gray('   ▸ Drive') + chalk.cyan(` (${driveTools.length} tools)`) + chalk.green(' ✓'));
-
-    const sheetsTools = createSheetsTools(authClient);
-    console.log(chalk.gray('   ▸ Sheets') + chalk.cyan(` (${sheetsTools.length} tools)`) + chalk.green(' ✓'));
-
-    [...gmailTools, ...calendarTools, ...driveTools, ...sheetsTools].forEach((tool) =>
-        toolRegistry.register(tool)
-    );
-
-    const totalTools = toolRegistry.getAll().length;
-    console.log(chalk.bold.green(`\n   ✓ ${totalTools} tools ready`));
+    console.log(chalk.gray('\n   Tool registry initialized (tools will be loaded per-user)'));
+    console.log(chalk.green('   ✓ Components ready'));
 
     // ── Step 3: Initialize Agent ──
-    console.log(chalk.bold.blue('\n━━━ STEP 3/4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.bold.blue('\n━━━ STEP 3/4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
     console.log(chalk.bold('🤖 Starting AI Agent Core'));
     console.log(chalk.gray('   Initializing OpenAI-powered agent...\n'));
 
-    const agent = new AgentCore(nlpEngine, toolRegistry, memoryManager);
-    console.log(chalk.green('   ✓ Agent ready\n'));
+    const agent = new AgentCore(nlpEngine, toolRegistry, memoryManager, userManager);
+    console.log(chalk.green('   ✓ Agent ready with multi-user support\n'));
 
-    // ── Step 4: Start WhatsApp ──
-    console.log(chalk.bold.blue('━━━ STEP 4/4 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    // ── Step 4: Start OAuth Callback Server ──
+    console.log(chalk.bold.blue('━━━ STEP 4/5 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    console.log(chalk.bold('🔐 Starting OAuth Callback Server'));
+    console.log(chalk.gray('   Setting up Google authentication endpoint...\n'));
+
+    const oauthServer = new OAuthCallbackServer(userManager);
+    try {
+        await oauthServer.start();
+        console.log(chalk.green('   ✓ OAuth server ready to handle registrations\n'));
+    } catch (error: any) {
+        console.log(chalk.bold.red('\n   ✖ Failed to start OAuth server'));
+        console.log(chalk.gray(`   → ${error.message}`));
+        console.log(chalk.yellow('   💡 Make sure port 3000 is not in use\n'));
+        process.exit(1);
+    }
+
+    // ── Step 5: Start WhatsApp ──
+    console.log(chalk.bold.blue('━━━ STEP 5/5 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
     console.log(chalk.bold('📱 Connecting to WhatsApp'));
     console.log(chalk.gray('   Establishing connection...\n'));
 
-    const whatsapp = new WhatsAppClient(agent);
+    const whatsapp = new WhatsAppClient(agent, userManager);
     await whatsapp.start();
 
-    console.log(chalk.bold.green('\n╔═══════════════════════════════════════════════════╗'));
-    console.log(chalk.bold.green('║') + chalk.bold.white('   ✓ WORKSPACE NAVIGATOR IS RUNNING                ') + chalk.bold.green('║'));
-    console.log(chalk.bold.green('╚═══════════════════════════════════════════════════╝'));
-    console.log(chalk.gray('\n   Listening for WhatsApp messages...'));
+    console.log(chalk.bold.green('\n╔═════════════════════════════════════════════════════════╗'));
+    console.log(chalk.bold.green('║') + chalk.bold.white('   ✓ WORKSPACE NAVIGATOR IS RUNNING                      ') + chalk.bold.green('║'));
+    console.log(chalk.bold.green('║') + chalk.yellow('   📱 Multi-User Mode: Anyone can register!               ') + chalk.bold.green('║'));
+    console.log(chalk.bold.green('╚═════════════════════════════════════════════════════════╝'));
+    console.log(chalk.gray('\n   📥 Listening for WhatsApp messages...'));
+    console.log(chalk.cyan('   📝 New users can send /register to get started'));
     console.log(chalk.gray('   Press Ctrl+C to stop\n'));
 
     // ── Graceful Shutdown ──
-    const shutdown = () => {
-        console.log(chalk.yellow('\n\n━━━ SHUTTING DOWN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
+    const shutdown = async () => {
+        console.log(chalk.yellow('\n\n━━━ SHUTTING DOWN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
         console.log(chalk.gray('   Cleaning up resources...'));
         memoryManager.shutdown();
+        await userManager.shutdown();
         console.log(chalk.green('   ✓ Shutdown complete\n'));
         process.exit(0);
     };

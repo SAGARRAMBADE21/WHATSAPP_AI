@@ -9,99 +9,123 @@ import { GoogleTokens } from '../types';
 import chalk from 'chalk';
 
 export class GoogleAuthManager {
-    private oauth2Client: OAuth2Client;
-    private tokens: GoogleTokens | null = null;
+  private oauth2Client: OAuth2Client;
+  private tokens: GoogleTokens | null = null;
+  private tokenPath: string;
 
-    constructor() {
-        this.oauth2Client = new google.auth.OAuth2(
-            config.google.clientId,
-            config.google.clientSecret,
-            config.google.redirectUri
-        );
+  constructor(tokenPath?: string) {
+    this.tokenPath = tokenPath || config.google.tokenPath;
 
-        this.oauth2Client.on('tokens', (tokens) => {
-            if (tokens.refresh_token) {
-                this.tokens = { ...this.tokens, ...tokens } as GoogleTokens;
-                this.saveTokens();
-            }
-        });
-    }
+    this.oauth2Client = new google.auth.OAuth2(
+      config.google.clientId,
+      config.google.clientSecret,
+      config.google.redirectUri
+    );
 
-    getClient(): OAuth2Client {
-        return this.oauth2Client;
-    }
+    this.oauth2Client.on('tokens', (tokens) => {
+      if (tokens.refresh_token) {
+        this.tokens = { ...this.tokens, ...tokens } as GoogleTokens;
+        this.saveTokens();
+      }
+    });
+  }
 
-    async initialize(): Promise<boolean> {
-        try {
-            const loaded = this.loadTokens();
-            if (loaded) {
-                this.oauth2Client.setCredentials(this.tokens!);
-                // Verify tokens are still valid
-                const tokenInfo = await this.oauth2Client.getAccessToken();
-                if (tokenInfo.token) {
-                    console.log(chalk.green('   ✓ Authenticated with stored tokens'));
-                    return true;
-                }
-            }
-        } catch (error) {
-            console.log(chalk.yellow('   ⚠  Stored tokens invalid, requesting authorization'));
+  getClient(): OAuth2Client {
+    return this.oauth2Client;
+  }
+
+  async initialize(skipInteractive: boolean = false): Promise<boolean> {
+    try {
+      const loaded = this.loadTokens();
+      if (loaded) {
+        this.oauth2Client.setCredentials(this.tokens!);
+        // Verify tokens are still valid
+        const tokenInfo = await this.oauth2Client.getAccessToken();
+        if (tokenInfo.token) {
+          console.log(chalk.green('   ✓ Authenticated with stored tokens'));
+          return true;
         }
-
-        return await this.authorizeInteractive();
+      }
+    } catch (error) {
+      console.log(chalk.yellow('   ⚠  Stored tokens invalid or expired'));
+      if (skipInteractive) return false;
     }
 
-    private async authorizeInteractive(): Promise<boolean> {
-        const authUrl = this.oauth2Client.generateAuthUrl({
-            access_type: 'offline',
-            scope: [...config.google.scopes],
-            prompt: 'consent',
-        });
+    if (skipInteractive) return false;
 
-        console.log(chalk.cyan('\n   ┌─────────────────────────────────────────────────┐'));
-        console.log(chalk.cyan('   │') + chalk.bold(' 🔐 Authorization Required                     ') + chalk.cyan('│'));
-        console.log(chalk.cyan('   └─────────────────────────────────────────────────┘\n'));
+    console.log(chalk.yellow('   ⚠  Requesting authorization (Interactive)'));
+    return await this.authorizeInteractive();
+  }
 
-        console.log(chalk.bold('   💡 Steps:'));
-        console.log(chalk.gray('      1. Browser will open automatically'));
-        console.log(chalk.gray('      2. Sign in with your Google account'));
-        console.log(chalk.gray('      3. Grant permissions for Gmail, Calendar, Drive, Sheets'));
-        console.log(chalk.gray('      4. Return here for success message\n'));
+  /**
+   * Get OAuth URL for user authorization (for WhatsApp-based registration)
+   */
+  getAuthUrl(state?: string): string {
+    const authParams: any = {
+      access_type: 'offline',
+      scope: [...config.google.scopes],
+      prompt: 'consent',
+    };
+    
+    if (state) {
+      authParams.state = state;
+    }
+    
+    return this.oauth2Client.generateAuthUrl(authParams);
+  }
 
-        // Auto-open browser (Windows)
-        try {
-            const { exec } = require('child_process');
-            exec(`start "" "${authUrl}"`);
-            console.log(chalk.cyan('   🌐 Browser opening...\n'));
-        } catch (err) {
-            console.log(chalk.yellow('   ⚠  Could not auto-open browser'));
-            console.log(chalk.gray('   → Please manually visit: accounts.google.com/o/oauth2\n'));
+  private async authorizeInteractive(): Promise<boolean> {
+    const authUrl = this.oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      scope: [...config.google.scopes],
+      prompt: 'consent',
+    });
+
+    console.log(chalk.cyan('\n   ┌─────────────────────────────────────────────────┐'));
+    console.log(chalk.cyan('   │') + chalk.bold(' 🔐 Authorization Required                     ') + chalk.cyan('│'));
+    console.log(chalk.cyan('   └─────────────────────────────────────────────────┘\n'));
+
+    console.log(chalk.bold('   💡 Steps:'));
+    console.log(chalk.gray('      1. Browser will open automatically'));
+    console.log(chalk.gray('      2. Sign in with your Google account'));
+    console.log(chalk.gray('      3. Grant permissions for Gmail, Calendar, Drive, Sheets'));
+    console.log(chalk.gray('      4. Return here for success message\n'));
+
+    // Auto-open browser (Windows)
+    try {
+      const { exec } = require('child_process');
+      exec(`start "" "${authUrl}"`);
+      console.log(chalk.cyan('   🌐 Browser opening...\n'));
+    } catch (err) {
+      console.log(chalk.yellow('   ⚠  Could not auto-open browser'));
+      console.log(chalk.gray('   → Please manually visit: accounts.google.com/o/oauth2\n'));
+    }
+
+    return new Promise((resolve) => {
+      let resolved = false;
+
+      // Timeout after 5 minutes
+      const timeout = setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          console.error('\n❌ Authorization timeout (5 minutes). Please restart and try again.');
+          server.close();
+          resolve(false);
         }
+      }, 5 * 60 * 1000);
 
-        return new Promise((resolve) => {
-            let resolved = false;
+      const server = http.createServer(async (req, res) => {
+        if (resolved) return;
 
-            // Timeout after 5 minutes
-            const timeout = setTimeout(() => {
-                if (!resolved) {
-                    resolved = true;
-                    console.error('\n❌ Authorization timeout (5 minutes). Please restart and try again.');
-                    server.close();
-                    resolve(false);
-                }
-            }, 5 * 60 * 1000);
+        try {
+          const url = new URL(req.url!, `http://localhost:3000`);
+          const code = url.searchParams.get('code');
+          const error = url.searchParams.get('error');
 
-            const server = http.createServer(async (req, res) => {
-                if (resolved) return;
-
-                try {
-                    const url = new URL(req.url!, `http://localhost:3000`);
-                    const code = url.searchParams.get('code');
-                    const error = url.searchParams.get('error');
-
-                    // Handle OAuth errors (user denied access, etc.)
-                    if (error) {
-                        res.writeHead(400, { 'Content-Type': 'text/html' });
-                        res.end(`
+          // Handle OAuth errors (user denied access, etc.)
+          if (error) {
+            res.writeHead(400, { 'Content-Type': 'text/html' });
+            res.end(`
               <html>
                 <head>
                   <title>Authorization Failed</title>
@@ -121,22 +145,22 @@ export class GoogleAuthManager {
                 </body>
               </html>
             `);
-                        server.close();
-                        clearTimeout(timeout);
-                        resolved = true;
-                        console.error(`\n❌ Authorization failed: ${error}`);
-                        resolve(false);
-                        return;
-                    }
+            server.close();
+            clearTimeout(timeout);
+            resolved = true;
+            console.error(`\n❌ Authorization failed: ${error}`);
+            resolve(false);
+            return;
+          }
 
-                    if (code) {
-                        const { tokens } = await this.oauth2Client.getToken(code);
-                        this.oauth2Client.setCredentials(tokens);
-                        this.tokens = tokens as GoogleTokens;
-                        this.saveTokens();
+          if (code) {
+            const { tokens } = await this.oauth2Client.getToken(code);
+            this.oauth2Client.setCredentials(tokens);
+            this.tokens = tokens as GoogleTokens;
+            this.saveTokens();
 
-                        res.writeHead(200, { 'Content-Type': 'text/html' });
-                        res.end(`
+            res.writeHead(200, { 'Content-Type': 'text/html' });
+            res.end(`
               <html>
                 <head>
                   <title>Authorization Successful</title>
@@ -162,15 +186,15 @@ export class GoogleAuthManager {
               </html>
             `);
 
-                        server.close();
-                        clearTimeout(timeout);
-                        resolved = true;
-                        console.log(chalk.green('\n   ✓ Google authorization successful\n'));
-                        resolve(true);
-                    }
-                } catch (err: any) {
-                    res.writeHead(500, { 'Content-Type': 'text/html' });
-                    res.end(`
+            server.close();
+            clearTimeout(timeout);
+            resolved = true;
+            console.log(chalk.green('\n   ✓ Google authorization successful\n'));
+            resolve(true);
+          }
+        } catch (err: any) {
+          res.writeHead(500, { 'Content-Type': 'text/html' });
+          res.end(`
             <html>
               <head>
                 <title>Authorization Error</title>
@@ -189,55 +213,55 @@ export class GoogleAuthManager {
               </body>
             </html>
           `);
-                    server.close();
-                    clearTimeout(timeout);
-                    resolved = true;
-                    console.log(chalk.red(`\n   ✖ Authorization error: ${err.message}`));
-                    resolve(false);
-                }
-            });
-
-            server.listen(3000, () => {
-                console.log(chalk.gray('   ⏳ Waiting for authorization...\n'));
-            });
-
-            server.on('error', (err: any) => {
-                if (!resolved) {
-                    resolved = true;
-                    clearTimeout(timeout);
-                    console.log(chalk.red(`\n   ✖ Server error: ${err.message}`));
-                    if (err.code === 'EADDRINUSE') {
-                        console.log(chalk.yellow('   💡 Port 3000 is already in use. Close other apps and try again.\n'));
-                    }
-                    resolve(false);
-                }
-            });
-        });
-    }
-
-    private loadTokens(): boolean {
-        try {
-            const dir = path.dirname(config.google.tokenPath);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-            if (fs.existsSync(config.google.tokenPath)) {
-                const raw = fs.readFileSync(config.google.tokenPath, 'utf-8');
-                this.tokens = JSON.parse(raw);
-                return true;
-            }
-        } catch (error) {
-            console.log(chalk.red('[GoogleAuth] Error loading tokens:'), error);
+          server.close();
+          clearTimeout(timeout);
+          resolved = true;
+          console.log(chalk.red(`\n   ✖ Authorization error: ${err.message}`));
+          resolve(false);
         }
-        return false;
-    }
+      });
 
-    private saveTokens(): void {
-        try {
-            const dir = path.dirname(config.google.tokenPath);
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-            fs.writeFileSync(config.google.tokenPath, JSON.stringify(this.tokens, null, 2));
-        } catch (error) {
-            console.log(chalk.red('[GoogleAuth] Error saving tokens:'), error);
+      server.listen(3000, () => {
+        console.log(chalk.gray('   ⏳ Waiting for authorization...\n'));
+      });
+
+      server.on('error', (err: any) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timeout);
+          console.log(chalk.red(`\n   ✖ Server error: ${err.message}`));
+          if (err.code === 'EADDRINUSE') {
+            console.log(chalk.yellow('   💡 Port 3000 is already in use. Close other apps and try again.\n'));
+          }
+          resolve(false);
         }
+      });
+    });
+  }
+
+  private loadTokens(): boolean {
+    try {
+      const dir = path.dirname(this.tokenPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+      if (fs.existsSync(this.tokenPath)) {
+        const raw = fs.readFileSync(this.tokenPath, 'utf-8');
+        this.tokens = JSON.parse(raw);
+        return true;
+      }
+    } catch (error) {
+      console.log(chalk.red('[GoogleAuth] Error loading tokens:'), error);
     }
+    return false;
+  }
+
+  private saveTokens(): void {
+    try {
+      const dir = path.dirname(this.tokenPath);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(this.tokenPath, JSON.stringify(this.tokens, null, 2));
+    } catch (error) {
+      console.log(chalk.red('[GoogleAuth] Error saving tokens:'), error);
+    }
+  }
 }

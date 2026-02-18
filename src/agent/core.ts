@@ -1,24 +1,84 @@
 import { NLPEngine } from '../nlp/engine';
 import { ToolRegistry } from '../tools/registry';
 import { MemoryManager } from '../memory/manager';
+import { UserManager } from '../auth/user-manager';
 import { IncomingMessage, ToolResult, ExecutionContext } from '../types';
+import { createGmailTools } from '../tools/gmail';
+import { createCalendarTools } from '../tools/calendar';
+import { createDriveTools } from '../tools/drive';
+import { createSheetsTools } from '../tools/sheets';
+import { createDocsTools } from '../tools/docs';
+import { createClassroomTools } from '../tools/classroom';
 
 export class AgentCore {
     private nlp: NLPEngine;
     private tools: ToolRegistry;
     private memory: MemoryManager;
+    private userManager: UserManager;
+    private userToolRegistries: Map<string, ToolRegistry> = new Map();
 
-    constructor(nlp: NLPEngine, tools: ToolRegistry, memory: MemoryManager) {
+    constructor(nlp: NLPEngine, tools: ToolRegistry, memory: MemoryManager, userManager: UserManager) {
         this.nlp = nlp;
         this.tools = tools;
         this.memory = memory;
+        this.userManager = userManager;
     }
 
-    async handleMessage(message: IncomingMessage): Promise<string> {
+    /**
+     * Get or create tool registry for a specific user with their authenticated Google client
+     */
+    private async getUserToolRegistry(phoneNumber: string): Promise<ToolRegistry | null> {
+        // Check if we already have tools loaded for this user
+        if (this.userToolRegistries.has(phoneNumber)) {
+            return this.userToolRegistries.get(phoneNumber)!;
+        }
+
+        // Get user's authenticated Google client
+        const authClient = await this.userManager.getUserAuthClient(phoneNumber);
+        if (!authClient) {
+            return null;
+        }
+
+        // Create new tool registry for this user
+        const userTools = new ToolRegistry();
+
+        // Load all tools with user's auth client
+        const gmailTools = createGmailTools(authClient);
+        const calendarTools = createCalendarTools(authClient);
+        const driveTools = createDriveTools(authClient);
+        const sheetsTools = createSheetsTools(authClient);
+        const docsTools = createDocsTools(authClient);
+        const classroomTools = createClassroomTools(authClient);
+
+        [...gmailTools, ...calendarTools, ...driveTools, ...sheetsTools, ...docsTools, ...classroomTools].forEach((tool) =>
+            userTools.register(tool)
+        );
+
+        // Cache for future use
+        this.userToolRegistries.set(phoneNumber, userTools);
+
+        return userTools;
+    }
+
+    async handleMessage(message: IncomingMessage, phoneNumber: string): Promise<string> {
         const { senderId, senderName, text } = message;
 
+        // Check if user is registered
+        const isRegistered = await this.userManager.isUserRegistered(phoneNumber);
+        if (!isRegistered) {
+            return '⚠️ You need to register first!\n\n' +
+                '📝 Send /register to connect your Google Workspace\n' +
+                '🔐 You will get a secure link to authorize access';
+        }
+
+        // Get user-specific tool registry
+        const userTools = await this.getUserToolRegistry(phoneNumber);
+        if (!userTools) {
+            return '❌ Failed to load your workspace tools. Please try /logout and re-register.';
+        }
+
         // Ensure user profile exists
-        const userProfile = this.memory.getOrCreateUser(senderId, senderName);
+        const userProfile = await this.memory.getOrCreateUser(senderId, senderName);
         const userId = userProfile.userId;
 
         console.log(`[Agent] Processing message from ${senderName} (${senderId}): "${text}"`);
@@ -32,16 +92,16 @@ export class AgentCore {
         const history = this.memory.getConversationHistory(userId);
 
         // Get relevant long-term context (RAG-lite)
-        const memoryContext = this.memory.getRelevantContext(userId, text);
+        const memoryContext = await this.memory.getRelevantContext(userId, text);
 
         // Add user message to short-term memory
         this.memory.addConversationTurn(userId, 'user', text);
 
-        // Process through NLP engine
+        // Process through NLP engine with user-specific tools
         const nlpResponse = await this.nlp.processMessage(
             text,
             history,
-            this.tools.getAll(),
+            userTools.getAll(),
             memoryContext
         );
 
@@ -55,8 +115,8 @@ export class AgentCore {
                     break;
                 }
 
-                // Check tool exists
-                const tool = this.tools.get(toolCall.tool_name);
+                // Check tool exists in user's registry
+                const tool = userTools.get(toolCall.tool_name);
                 if (!tool) {
                     responseText = `I tried to use the tool "${toolCall.tool_name}" but it doesn't exist. Please try rephrasing your request.`;
                     break;
@@ -83,7 +143,7 @@ export class AgentCore {
                 }
 
                 // Record tool call in long-term memory
-                this.memory.recordToolCall(userId, toolCall.tool_name, toolCall.parameters, {
+                await this.memory.recordToolCall(userId, toolCall.tool_name, toolCall.parameters, {
                     success: result.success,
                     summary: result.message,
                 });
@@ -92,12 +152,12 @@ export class AgentCore {
                 if (toolCall.parameters.to) {
                     const emails = toolCall.parameters.to.split(',').map((e: string) => e.trim());
                     for (const email of emails) {
-                        this.memory.longTerm.updateFrequentContact(userId, { name: '', email, frequency: 0 });
+                        await this.memory.longTerm.updateFrequentContact(userId, { name: '', email, frequency: 0 });
                     }
                 }
                 if (toolCall.parameters.attendees) {
                     for (const email of toolCall.parameters.attendees) {
-                        this.memory.longTerm.updateFrequentContact(userId, { name: '', email, frequency: 0 });
+                        await this.memory.longTerm.updateFrequentContact(userId, { name: '', email, frequency: 0 });
                     }
                 }
 

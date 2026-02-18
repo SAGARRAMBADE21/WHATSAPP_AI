@@ -1,70 +1,125 @@
+import { Db, Collection } from 'mongodb';
 import { config } from '../config';
 import { MemoryEntry, UserProfile, ContactInfo } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import fs from 'fs';
 import path from 'path';
-
-interface StorageData {
-    users: Record<string, UserProfile>;
-    entries: MemoryEntry[];
-}
+import chalk from 'chalk';
 
 export class LongTermMemory {
-    private dataPath: string;
-    private data: StorageData = { users: {}, entries: [] };
+    private db!: Db;
+    private usersCol!: Collection<UserProfile>;
+    private entriesCol!: Collection<MemoryEntry>;
+    private initialized: boolean = false;
 
     constructor() {
-        const dir = path.dirname(config.memory.dbPath);
-        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-
-        this.dataPath = config.memory.dbPath.replace('.db', '.json');
-        this.load();
+        // DB will be set via initialize()
     }
 
-    private load(): void {
+    /**
+     * Initialize with MongoDB database connection
+     */
+    async initialize(db: Db): Promise<void> {
+        this.db = db;
+        this.usersCol = db.collection<UserProfile>('memory_users');
+        this.entriesCol = db.collection<MemoryEntry>('memory_entries');
+
+        // Create indexes for fast lookups
+        await this.usersCol.createIndex({ userId: 1 }, { unique: true });
+        await this.usersCol.createIndex({ phoneNumber: 1 });
+        await this.entriesCol.createIndex({ userId: 1, timestamp: -1 });
+        await this.entriesCol.createIndex({ userId: 1, type: 1 });
+        await this.entriesCol.createIndex({ tags: 1 });
+
+        this.initialized = true;
+
+        // Migrate existing local data if present
+        await this.migrateFromLocal();
+
+        const userCount = await this.usersCol.countDocuments();
+        const entryCount = await this.entriesCol.countDocuments();
+        console.log(chalk.gray(`   ▸ Long-term memory: ${userCount} users, ${entryCount} entries (MongoDB)`));
+    }
+
+    /**
+     * Migrate data from old local JSON file to MongoDB (one-time)
+     */
+    private async migrateFromLocal(): Promise<void> {
         try {
-            if (fs.existsSync(this.dataPath)) {
-                const raw = fs.readFileSync(this.dataPath, 'utf-8');
-                const parsed = JSON.parse(raw);
-                // Deserialize dates
-                this.data = {
-                    users: Object.fromEntries(
-                        Object.entries(parsed.users || {}).map(([k, v]: [string, any]) => [
-                            k,
-                            {
-                                ...v,
-                                createdAt: new Date(v.createdAt),
-                                updatedAt: new Date(v.updatedAt),
-                            },
-                        ])
-                    ),
-                    entries: (parsed.entries || []).map((e: any) => ({
-                        ...e,
-                        timestamp: new Date(e.timestamp),
-                    })),
-                };
-            } else {
-                this.data = { users: {}, entries: [] };
+            const localPath = config.memory.dbPath.replace('.db', '.json');
+            if (!fs.existsSync(localPath)) return;
+
+            const raw = fs.readFileSync(localPath, 'utf-8');
+            const parsed = JSON.parse(raw);
+
+            if (!parsed.users && !parsed.entries) return;
+
+            // Check if we already migrated (by checking if any docs exist)
+            const existingCount = await this.usersCol.countDocuments();
+            if (existingCount > 0) {
+                // Already have data in MongoDB, skip migration
+                return;
             }
-        } catch (error) {
-            console.error('[LongTermMemory] Failed to load data:', error);
-            this.data = { users: {}, entries: [] };
-        }
-    }
 
-    private save(): void {
-        try {
-            fs.writeFileSync(this.dataPath, JSON.stringify(this.data, null, 2));
+            console.log(chalk.cyan('   🔄 Migrating local memory to MongoDB...'));
+
+            // Migrate users
+            const users = Object.values(parsed.users || {}) as any[];
+            if (users.length > 0) {
+                for (const user of users) {
+                    await this.usersCol.updateOne(
+                        { userId: user.userId },
+                        {
+                            $set: {
+                                ...user,
+                                createdAt: new Date(user.createdAt),
+                                updatedAt: new Date(user.updatedAt),
+                            }
+                        },
+                        { upsert: true }
+                    );
+                }
+                console.log(chalk.green(`   ✓ Migrated ${users.length} user profiles`));
+            }
+
+            // Migrate entries
+            const entries = (parsed.entries || []) as any[];
+            if (entries.length > 0) {
+                const docs = entries.map((e: any) => ({
+                    ...e,
+                    timestamp: new Date(e.timestamp),
+                }));
+                await this.entriesCol.insertMany(docs);
+                console.log(chalk.green(`   ✓ Migrated ${entries.length} memory entries`));
+            }
+
+            // Rename local file to mark as migrated
+            const backupPath = localPath + '.migrated';
+            fs.renameSync(localPath, backupPath);
+            console.log(chalk.gray(`   ▸ Local file backed up to ${backupPath}`));
+
         } catch (error) {
-            console.error('[LongTermMemory] Failed to save data:', error);
+            console.error(chalk.yellow('   ⚠ Migration from local file failed (non-critical):'), error);
         }
     }
 
     // ── User Profiles ──
 
-    getOrCreateUser(phoneNumber: string, displayName?: string): UserProfile {
-        const existing = Object.values(this.data.users).find((u) => u.phoneNumber === phoneNumber);
+    async getOrCreateUser(phoneNumber: string, displayName?: string): Promise<UserProfile> {
+        if (!this.initialized) {
+            // Fallback for uninitialized state
+            return {
+                userId: uuidv4(),
+                phoneNumber,
+                displayName,
+                preferences: {},
+                frequentContacts: [],
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            };
+        }
 
+        const existing = await this.usersCol.findOne({ phoneNumber });
         if (existing) {
             return existing;
         }
@@ -82,84 +137,146 @@ export class LongTermMemory {
             updatedAt: now,
         };
 
-        this.data.users[userId] = user;
-        this.save();
-
+        await this.usersCol.insertOne(user);
         return user;
     }
 
-    updatePreference(userId: string, key: string, value: any): void {
-        const user = this.data.users[userId];
-        if (user) {
-            user.preferences[key] = value;
-            user.updatedAt = new Date();
-            this.save();
-        }
-    }
+    async updatePreference(userId: string, key: string, value: any): Promise<void> {
+        if (!this.initialized) return;
 
-    getPreferences(userId: string): Record<string, any> {
-        return this.data.users[userId]?.preferences || {};
-    }
-
-    updateFrequentContact(userId: string, contact: ContactInfo): void {
-        const user = this.data.users[userId];
-        if (user) {
-            const existing = user.frequentContacts.find((c) => c.email === contact.email);
-            if (existing) {
-                existing.frequency += 1;
-                existing.name = contact.name || existing.name;
-            } else {
-                user.frequentContacts.push({ ...contact, frequency: 1 });
+        await this.usersCol.updateOne(
+            { userId },
+            {
+                $set: {
+                    [`preferences.${key}`]: value,
+                    updatedAt: new Date(),
+                }
             }
-            // Keep top 50 contacts
-            user.frequentContacts.sort((a, b) => b.frequency - a.frequency);
-            user.frequentContacts = user.frequentContacts.slice(0, 50);
-            user.updatedAt = new Date();
-            this.save();
+        );
+    }
+
+    async getPreferences(userId: string): Promise<Record<string, any>> {
+        if (!this.initialized) return {};
+
+        const user = await this.usersCol.findOne({ userId });
+        return user?.preferences || {};
+    }
+
+    async updateFrequentContact(userId: string, contact: ContactInfo): Promise<void> {
+        if (!this.initialized) return;
+
+        const user = await this.usersCol.findOne({ userId });
+        if (!user) return;
+
+        const contacts = user.frequentContacts || [];
+        const existing = contacts.find((c) => c.email === contact.email);
+
+        if (existing) {
+            existing.frequency += 1;
+            existing.name = contact.name || existing.name;
+        } else {
+            contacts.push({ ...contact, frequency: 1 });
         }
+
+        // Keep top 50 contacts
+        contacts.sort((a, b) => b.frequency - a.frequency);
+        const trimmed = contacts.slice(0, 50);
+
+        await this.usersCol.updateOne(
+            { userId },
+            {
+                $set: {
+                    frequentContacts: trimmed,
+                    updatedAt: new Date(),
+                }
+            }
+        );
     }
 
     // ── Memory Entries ──
 
-    addEntry(entry: Omit<MemoryEntry, 'id'>): string {
+    async addEntry(entry: Omit<MemoryEntry, 'id'>): Promise<string> {
         const id = uuidv4();
         const newEntry: MemoryEntry = {
             id,
             ...entry,
         };
-        this.data.entries.push(newEntry);
 
-        // Keep only the latest entries (prevent unlimited growth)
-        if (this.data.entries.length > config.memory.longTermMaxEntries) {
-            this.data.entries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-            this.data.entries = this.data.entries.slice(0, config.memory.longTermMaxEntries);
+        if (!this.initialized) return id;
+
+        await this.entriesCol.insertOne(newEntry);
+
+        // Keep only the latest entries per user (prevent unlimited growth)
+        const count = await this.entriesCol.countDocuments({ userId: entry.userId });
+        if (count > config.memory.longTermMaxEntries) {
+            // Find the oldest entries beyond the limit and delete them
+            const oldest = await this.entriesCol
+                .find({ userId: entry.userId })
+                .sort({ timestamp: 1 })
+                .limit(count - config.memory.longTermMaxEntries)
+                .toArray();
+
+            if (oldest.length > 0) {
+                const idsToDelete = oldest.map(e => e.id);
+                await this.entriesCol.deleteMany({ id: { $in: idsToDelete } });
+            }
         }
 
-        this.save();
         return id;
     }
 
-    searchEntries(userId: string, query: string, limit: number = 10): MemoryEntry[] {
+    async searchEntries(userId: string, query: string, limit: number = 10): Promise<MemoryEntry[]> {
+        if (!this.initialized) return [];
+
         const lowerQuery = query.toLowerCase();
-        return this.data.entries
-            .filter(
-                (e) =>
-                    e.userId === userId &&
-                    (JSON.stringify(e.content).toLowerCase().includes(lowerQuery) ||
-                        e.tags.some((t) => t.toLowerCase().includes(lowerQuery)))
-            )
-            .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-            .slice(0, limit);
+        const words = lowerQuery.split(/\s+/).filter(w => w.length > 2);
+
+        // Search by tags first (more efficient)
+        const tagResults = await this.entriesCol
+            .find({
+                userId,
+                tags: { $in: words },
+            })
+            .sort({ timestamp: -1 })
+            .limit(limit)
+            .toArray();
+
+        if (tagResults.length >= limit) return tagResults;
+
+        // Fallback: search by content (text search)
+        const remaining = limit - tagResults.length;
+        const tagIds = tagResults.map(r => r.id);
+
+        const contentResults = await this.entriesCol
+            .find({
+                userId,
+                id: { $nin: tagIds },
+            })
+            .sort({ timestamp: -1 })
+            .limit(remaining * 3) // Fetch more and filter client-side
+            .toArray();
+
+        const filtered = contentResults.filter(e =>
+            JSON.stringify(e.content).toLowerCase().includes(lowerQuery)
+        ).slice(0, remaining);
+
+        return [...tagResults, ...filtered];
     }
 
-    getRecentEntries(userId: string, type?: string, limit: number = 20): MemoryEntry[] {
-        return this.data.entries
-            .filter((e) => e.userId === userId && (!type || e.type === type))
-            .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
-            .slice(0, limit);
+    async getRecentEntries(userId: string, type?: string, limit: number = 20): Promise<MemoryEntry[]> {
+        if (!this.initialized) return [];
+
+        const filter: any = { userId };
+        if (type) filter.type = type;
+
+        return await this.entriesCol
+            .find(filter)
+            .sort({ timestamp: -1 })
+            .limit(limit)
+            .toArray();
     }
 
     close(): void {
-        this.save();
+        // No-op for MongoDB (connection managed by UserManager)
     }
 }

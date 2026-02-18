@@ -1,3 +1,4 @@
+import { Db } from 'mongodb';
 import { ShortTermMemory } from './short-term';
 import { WorkingMemory } from './working';
 import { LongTermMemory } from './long-term';
@@ -14,8 +15,15 @@ export class MemoryManager {
         this.longTerm = new LongTermMemory();
     }
 
-    getOrCreateUser(phoneNumber: string, displayName?: string): UserProfile {
-        return this.longTerm.getOrCreateUser(phoneNumber, displayName);
+    /**
+     * Initialize long-term memory with MongoDB connection
+     */
+    async initialize(db: Db): Promise<void> {
+        await this.longTerm.initialize(db);
+    }
+
+    async getOrCreateUser(phoneNumber: string, displayName?: string): Promise<UserProfile> {
+        return await this.longTerm.getOrCreateUser(phoneNumber, displayName);
     }
 
     addConversationTurn(userId: string, role: 'user' | 'assistant', content: string): void {
@@ -30,8 +38,8 @@ export class MemoryManager {
         return this.shortTerm.getHistory(userId);
     }
 
-    recordToolCall(userId: string, toolName: string, params: Record<string, any>, result: any): void {
-        this.longTerm.addEntry({
+    async recordToolCall(userId: string, toolName: string, params: Record<string, any>, result: any): Promise<void> {
+        await this.longTerm.addEntry({
             userId,
             type: 'tool_call',
             content: { tool: toolName, parameters: params, result },
@@ -40,10 +48,10 @@ export class MemoryManager {
         });
     }
 
-    getRelevantContext(userId: string, query: string): string {
-        const prefs = this.longTerm.getPreferences(userId);
-        const recentCalls = this.longTerm.getRecentEntries(userId, 'tool_call', 5);
-        const searchResults = this.longTerm.searchEntries(userId, query, 3);
+    async getRelevantContext(userId: string, query: string): Promise<string> {
+        const prefs = await this.longTerm.getPreferences(userId);
+        const recentCalls = await this.longTerm.getRecentEntries(userId, 'tool_call', 5);
+        const searchResults = await this.longTerm.searchEntries(userId, query, 3);
 
         let context = '';
 
