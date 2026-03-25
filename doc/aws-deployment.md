@@ -223,3 +223,116 @@ External APIs: OpenAI · Google Workspace · WhatsApp Web
 
 > **⚠️ Important**: Keep to a **single EC2 instance**. WhatsApp sessions are
 > tied to disk-based auth state and cannot be shared across multiple instances.
+
+---
+
+## 11. 🔒 Production Deploy (with Nginx + Atlas)
+
+### A — Allocate an Elastic IP (permanent IP)
+1. AWS Console → EC2 → **Elastic IPs** → **Allocate Elastic IP**
+2. Click **Allocate**
+3. Select it → **Actions → Associate Elastic IP**
+4. Select your instance → **Associate**
+5. Your EC2 now has a **permanent IP that never changes** ✅
+6. Update your domain DNS A record to this new IP
+
+### B — Set up MongoDB Atlas (free cloud database)
+1. Go to [mongodb.com/cloud/atlas/register](https://www.mongodb.com/cloud/atlas/register)
+2. Create a free **M0 cluster** (Shared, free forever)
+3. Create a DB user: **Database Access → Add User**
+4. Allow your EC2 IP: **Network Access → Add IP** → paste your Elastic IP
+5. Click **Connect → Drivers** → copy the connection string:
+   ```
+   mongodb+srv://youruser:yourpass@cluster0.xxxxx.mongodb.net/workspace_navigator
+   ```
+6. In your EC2 `.env`, set:
+   ```env
+   MONGODB_URI=mongodb+srv://youruser:yourpass@cluster0.xxxxx.mongodb.net/workspace_navigator
+   ```
+
+### C — Install Production Nginx Config
+```bash
+# Copy the nginx.conf from your repo
+sudo cp ~/WHATSAPP_AI/nginx.conf /etc/nginx/sites-available/whatsapp-ai
+
+# Edit: replace yourdomain.com with your actual domain
+sudo nano /etc/nginx/sites-available/whatsapp-ai
+
+# Enable it
+sudo ln -sf /etc/nginx/sites-available/whatsapp-ai /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Get SSL certificate (Let's Encrypt — free)
+sudo apt-get install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+
+# Test and reload
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### D — Run Production Stack
+```bash
+# Uses docker-compose.prod.yml override:
+# - App binds to 127.0.0.1 only (Nginx is gateway)
+# - Local mongo disabled (uses Atlas)
+# - Memory limits applied
+
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+---
+
+## 12. 🚀 Set Up CI/CD (Auto Deploy on Git Push)
+
+The `.github/workflows/deploy.yml` file auto-deploys every time you push to `main`.
+
+### Add GitHub Secrets
+1. Go to your repo on GitHub
+2. **Settings → Secrets and variables → Actions → New repository secret**
+3. Add these 3 secrets:
+
+| Secret Name | Value |
+|-------------|-------|
+| `EC2_HOST` | Your Elastic IP (e.g. `13.48.xx.xx`) |
+| `EC2_USER` | `ubuntu` |
+| `EC2_SSH_KEY` | Contents of your `.pem` key file |
+
+**To get your `.pem` key contents** (run in PowerShell):
+```powershell
+Get-Content C:\Users\SAGAR\Downloads\whatsapp-key.pem
+```
+Copy the entire output (including `-----BEGIN RSA PRIVATE KEY-----` lines).
+
+### Test CI/CD
+Make any small change → `git push origin main` → go to GitHub **Actions** tab → watch it deploy automatically ✅
+
+---
+
+## Final Production Architecture
+
+```
+Internet (HTTPS)
+     │
+     ▼
+[Route DNS] yourdomain.com → Elastic IP
+     │
+     ▼
+[EC2 Instance — Ubuntu 22.04]
+     │
+     ├── Nginx (port 443/SSL)
+     │     ├── Security headers
+     │     ├── Rate limiting
+     │     ├── Gzip
+     │     └── Proxy → localhost:3000 (WebSocket ✓)
+     │
+     └── Docker Compose (prod)
+           └── whatsapp-ai (127.0.0.1:3000)
+                 ├── Volume: whatsapp_auth (QR sessions)
+                 └── Volume: app_data (memory DB)
+
+[MongoDB Atlas] ← Cloud-managed, replicated, backed up
+[OpenAI API]    ← AI responses
+[Google OAuth]  ← Workspace access
+
+[GitHub Actions] → git push → auto SSH deploy → done ✅
+```
