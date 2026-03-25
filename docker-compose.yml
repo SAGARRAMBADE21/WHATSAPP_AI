@@ -1,0 +1,63 @@
+
+
+services:
+  # ─────────────────────────────────────────
+  # WhatsApp AI Application
+  # ─────────────────────────────────────────
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: whatsapp-ai
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      # Override MongoDB URI to point to the mongo service
+      MONGODB_URI: mongodb://mongo:27017
+      AUTH_STATE_PATH: /app/auth/baileys_auth
+      MEMORY_DB_PATH: /app/data/memory/navigator.db
+    volumes:
+      # Persist WhatsApp session auth state between restarts
+      - whatsapp_auth:/app/auth/baileys_auth
+      # Persist memory / SQLite data
+      - app_data:/app/data/memory
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─────────────────────────────────────────
+  # MongoDB (skip if using MongoDB Atlas)
+  # ─────────────────────────────────────────
+  mongo:
+    image: mongo:7
+    container_name: whatsapp-mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      # Use mongosh with shell so the exit code reflects the JS result
+      test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.runCommand({ping:1}).ok ? 0 : 1)"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    # Expose only inside Docker network (not to the host)
+    expose:
+      - "27017"
+
+volumes:
+  mongo_data:
+    driver: local
+  whatsapp_auth:
+    driver: local
+  app_data:
+    driver: local

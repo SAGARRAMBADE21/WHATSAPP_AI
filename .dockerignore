@@ -1,0 +1,17 @@
+node_modules
+dist
+.env
+.env.*
+auth/
+data/
+logs/
+*.log
+.git
+.gitignore
+.vscode
+.idea
+coverage
+*.tsbuildinfo
+doc
+*.zip
+README.md
