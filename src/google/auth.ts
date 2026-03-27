@@ -12,6 +12,7 @@ export class GoogleAuthManager {
   private oauth2Client: OAuth2Client;
   private tokens: GoogleTokens | null = null;
   private tokenPath: string;
+  private onTokenRefreshCallback: ((tokens: GoogleTokens) => void) | null = null;
 
   constructor(tokenPath?: string) {
     this.tokenPath = tokenPath || config.google.tokenPath;
@@ -22,12 +23,29 @@ export class GoogleAuthManager {
       config.google.redirectUri
     );
 
+    // Listen for ALL token updates from Google (not just ones with refresh_token)
     this.oauth2Client.on('tokens', (tokens) => {
-      if (tokens.refresh_token) {
-        this.tokens = { ...this.tokens, ...tokens } as GoogleTokens;
-        this.saveTokens();
+      // Preserve existing refresh_token if Google doesn't return one
+      this.tokens = {
+        ...this.tokens,
+        ...tokens,
+        refresh_token: tokens.refresh_token || this.tokens?.refresh_token || '',
+      } as GoogleTokens;
+      this.saveTokens();
+
+      // Notify consumer (e.g., UserManager) so they can sync to MongoDB
+      if (this.onTokenRefreshCallback) {
+        this.onTokenRefreshCallback(this.tokens);
       }
     });
+  }
+
+  /**
+   * Set a callback to be notified whenever tokens are refreshed.
+   * Used by UserManager to sync refreshed tokens back to MongoDB.
+   */
+  onTokenRefresh(callback: (tokens: GoogleTokens) => void): void {
+    this.onTokenRefreshCallback = callback;
   }
 
   getClient(): OAuth2Client {
@@ -39,16 +57,69 @@ export class GoogleAuthManager {
       const loaded = this.loadTokens();
       if (loaded) {
         this.oauth2Client.setCredentials(this.tokens!);
-        // Verify tokens are still valid
-        const tokenInfo = await this.oauth2Client.getAccessToken();
-        if (tokenInfo.token) {
-          console.log(chalk.green('   ✓ Authenticated with stored tokens'));
-          return true;
+
+        // Check if token is expired (or will expire within 5 minutes) and try to refresh
+        const REFRESH_BUFFER_MS = 5 * 60 * 1000; // Refresh 5 minutes before actual expiry
+        const isExpired = this.tokens!.expiry_date ? this.tokens!.expiry_date < (Date.now() + REFRESH_BUFFER_MS) : false;
+
+        if (isExpired && this.tokens!.refresh_token) {
+          console.log(chalk.yellow('   ⚠  Access token expired or expiring soon, refreshing...'));
+          try {
+            const { credentials } = await this.oauth2Client.refreshAccessToken();
+            this.oauth2Client.setCredentials(credentials);
+            // Preserve the refresh_token (Google may not return it on refresh)
+            this.tokens = {
+              ...this.tokens,
+              ...credentials,
+              refresh_token: credentials.refresh_token || this.tokens!.refresh_token,
+            } as GoogleTokens;
+            this.saveTokens();
+            // Notify consumer of token refresh
+            if (this.onTokenRefreshCallback) {
+              this.onTokenRefreshCallback(this.tokens!);
+            }
+            console.log(chalk.green('   ✓ Token refreshed successfully'));
+            return true;
+          } catch (refreshError: any) {
+            console.log(chalk.red(`   ✖ Token refresh failed: ${refreshError.message}`));
+            // If refresh fails, fall through to interactive auth
+          }
+        } else {
+          // Token not expired, verify it works
+          try {
+            const tokenInfo = await this.oauth2Client.getAccessToken();
+            if (tokenInfo.token) {
+              console.log(chalk.green('   ✓ Authenticated with stored tokens'));
+              return true;
+            }
+          } catch (verifyError: any) {
+            console.log(chalk.yellow(`   ⚠  Token verification failed: ${verifyError.message}`));
+            // Try refreshing as a fallback
+            if (this.tokens!.refresh_token) {
+              try {
+                const { credentials } = await this.oauth2Client.refreshAccessToken();
+                this.oauth2Client.setCredentials(credentials);
+                this.tokens = {
+                  ...this.tokens,
+                  ...credentials,
+                  refresh_token: credentials.refresh_token || this.tokens!.refresh_token,
+                } as GoogleTokens;
+                this.saveTokens();
+                // Notify consumer of token refresh
+                if (this.onTokenRefreshCallback) {
+                  this.onTokenRefreshCallback(this.tokens!);
+                }
+                console.log(chalk.green('   ✓ Token refreshed successfully'));
+                return true;
+              } catch (refreshError: any) {
+                console.log(chalk.red(`   ✖ Token refresh failed: ${refreshError.message}`));
+              }
+            }
+          }
         }
       }
     } catch (error) {
       console.log(chalk.yellow('   ⚠  Stored tokens invalid or expired'));
-      if (skipInteractive) return false;
     }
 
     if (skipInteractive) return false;

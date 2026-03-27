@@ -1,3 +1,7 @@
+// Fix DNS: Use Google DNS for SRV lookups (local router DNS may not support SRV records)
+import dns from 'dns';
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']);
+
 import { config } from './config';
 import { UserManager } from './auth/user-manager';
 import { OAuthCallbackServer } from './auth/oauth-server';

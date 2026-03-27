@@ -6,16 +6,16 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const execAsync = promisify(exec);
-
-// Path to the python script inside the manus skill folder
 const MANUS_SCRIPT = path.resolve(__dirname, "../../skills/manus-computer/manus skill/manus/scripts/manus.py");
 
-/**
- * Runs the manus.py script with the given arguments
- */
-async function runManusCommand(args: string): Promise<string> {
+async function runManusCommand(command: string, ...args: string[]): Promise<string> {
   try {
-    const { stdout, stderr } = await execAsync(`python "${MANUS_SCRIPT}" ${args}`, {
+    const safeArgs = args.map(arg => {
+      if (arg === undefined || arg === null) return "";
+      return `"${String(arg).replace(/"/g, '\\"')}"`;
+    }).join(" ");
+    
+    const { stdout, stderr } = await execAsync(`python "${MANUS_SCRIPT}" ${command} ${safeArgs}`, {
       env: { ...process.env },
     });
     return stdout || stderr;
@@ -24,21 +24,16 @@ async function runManusCommand(args: string): Promise<string> {
   }
 }
 
-/**
- * Tool Definitions for OpenAI
- */
 export const manusTools = [
+  // 1. Cloud AI
   {
     type: "function",
     function: {
-      name: "manus_send_task",
-      description: "Send a complex task to the Manus AI cloud to analyze and execute (hybrid mode or cloud only).",
+      name: "manus_send",
+      description: "Send a prompt to the Manus AI cloud to analyze and execute.",
       parameters: {
         type: "object",
-        properties: {
-          prompt: { type: "string", description: "The task for Manus AI to perform." },
-          mode: { type: "string", enum: ["agent", "chat", "adaptive"], description: "Execution mode." }
-        },
+        properties: { prompt: { type: "string" }, mode: { type: "string", enum: ["agent", "chat", "adaptive"] } },
         required: ["prompt"]
       }
     }
@@ -47,16 +42,64 @@ export const manusTools = [
     type: "function",
     function: {
       name: "manus_hybrid",
-      description: "Run a task in Hybrid Mode — Manus plans in the cloud, local machine executes.",
-      parameters: {
-        type: "object",
-        properties: {
-          prompt: { type: "string", description: "The task to perform." }
-        },
-        required: ["prompt"]
-      }
+      description: "Run a task in Hybrid Mode — Manus plans in the cloud, but controls the local machine.",
+      parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] }
     }
   },
+
+  // 2. Tasks & Projects
+  {
+    type: "function",
+    function: {
+      name: "manus_tasks",
+      description: "List recent tasks sent to Manus AI.",
+      parameters: { type: "object", properties: { limit: { type: "number" } } }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "manus_get_task",
+      description: "View the output of a specific Manus task.",
+      parameters: { type: "object", properties: { task_id: { type: "string" } }, required: ["task_id"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "manus_projects",
+      description: "List Manus projects.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+
+  // 3. Local Execution
+  {
+    type: "function",
+    function: {
+      name: "manus_exec",
+      description: "Execute a shell command locally on the computer using Manus.",
+      parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "manus_file_list",
+      description: "List files in a local directory.",
+      parameters: { type: "object", properties: { dir_path: { type: "string" } } }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "manus_file_read",
+      description: "Read the contents of a local file.",
+      parameters: { type: "object", properties: { file_path: { type: "string" } }, required: ["file_path"] }
+    }
+  },
+
+  // 4. Desktop Control
   {
     type: "function",
     function: {
@@ -68,8 +111,16 @@ export const manusTools = [
   {
     type: "function",
     function: {
-      name: "manus_list_tasks",
-      description: "List recent tasks sent to Manus AI.",
+      name: "manus_desktop_apps",
+      description: "List all running applications on the computer.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "manus_desktop_sysinfo",
+      description: "Get basic system information (CPU, RAM, OS).",
       parameters: { type: "object", properties: {} }
     }
   }
@@ -82,19 +133,39 @@ export async function handleManusToolCall(toolCall: any): Promise<string> {
   console.log(`[Manus Tool] Executing ${name} with payload:`, args);
 
   switch (name) {
-    case "manus_send_task":
-      const modeFlag = args.mode ? `--mode ${args.mode}` : "";
-      return await runManusCommand(`send "${args.prompt}" ${modeFlag}`);
-      
+    // Cloud
+    case "manus_send":
+      if (args.mode) return await runManusCommand("send", args.prompt, "--mode", args.mode);
+      return await runManusCommand("send", args.prompt);
     case "manus_hybrid":
-      return await runManusCommand(`hybrid "${args.prompt}"`);
+      return await runManusCommand("hybrid", args.prompt);
 
+    // Tasks & Projects
+    case "manus_tasks":
+      if (args.limit) return await runManusCommand("tasks", "--limit", args.limit.toString());
+      return await runManusCommand("tasks");
+    case "manus_get_task":
+      return await runManusCommand("task", args.task_id);
+    case "manus_projects":
+      return await runManusCommand("projects");
+
+    // Local execution
+    case "manus_exec":
+      return await runManusCommand("exec", args.command);
+    case "manus_file_list":
+      if (args.dir_path) return await runManusCommand("file-list", args.dir_path);
+      return await runManusCommand("file-list");
+    case "manus_file_read":
+      return await runManusCommand("file-read", args.file_path);
+
+    // Desktop
     case "manus_desktop_screenshot":
-      // Send directly back since it will just output a path or success text
-      return await runManusCommand(`desktop-screenshot`);
-
-    case "manus_list_tasks":
-      return await runManusCommand(`tasks`);
+      // Send directly back since it outputs path or success
+      return await runManusCommand("desktop-screenshot");
+    case "manus_desktop_apps":
+      return await runManusCommand("desktop-apps");
+    case "manus_desktop_sysinfo":
+      return await runManusCommand("desktop-sysinfo");
 
     default:
       return "Unknown Manus command.";

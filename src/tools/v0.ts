@@ -6,16 +6,15 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const execAsync = promisify(exec);
-
 const V0_SCRIPT = path.resolve(__dirname, "../../skills/v0skill/scripts/v0_platform.mjs");
 
-/**
- * Runs the v0_platform.mjs script with the given arguments
- */
 async function runV0Command(command: string, ...args: string[]): Promise<string> {
   try {
-    // Quote arguments to prevent shell injection issues
-    const safeArgs = args.map(arg => `"${arg.replace(/"/g, '\\"')}"`).join(" ");
+    const safeArgs = args.map(arg => {
+      if (arg === undefined || arg === null) return "";
+      return `"${String(arg).replace(/"/g, '\\"')}"`;
+    }).join(" ");
+    
     const { stdout, stderr } = await execAsync(`node "${V0_SCRIPT}" ${command} ${safeArgs}`, {
       env: { ...process.env },
     });
@@ -25,22 +24,17 @@ async function runV0Command(command: string, ...args: string[]): Promise<string>
   }
 }
 
-/**
- * Tool Definitions for OpenAI
- */
 export const v0Tools = [
+  // 1. Projects
   {
     type: "function",
     function: {
-      name: "v0_create_chat",
-      description: "Send a prompt to Vercel v0 to generate UI components, websites, or apps. Returns a preview URL.",
+      name: "v0_create_project",
+      description: "Create a new v0 project.",
       parameters: {
         type: "object",
-        properties: {
-          prompt: { type: "string", description: "What to build (e.g. 'A sleek dashboard UI')." },
-          project_id: { type: "string", description: "Optional project ID to continue working on." }
-        },
-        required: ["prompt"]
+        properties: { name: { type: "string" }, description: { type: "string" } },
+        required: ["name"]
       }
     }
   },
@@ -55,17 +49,90 @@ export const v0Tools = [
   {
     type: "function",
     function: {
+      name: "v0_get_project",
+      description: "Get details of a specific v0 project.",
+      parameters: { type: "object", properties: { project_id: { type: "string" } }, required: ["project_id"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "v0_delete_project",
+      description: "Delete a v0 project.",
+      parameters: { type: "object", properties: { project_id: { type: "string" } }, required: ["project_id"] }
+    }
+  },
+
+  // 2. Chats
+  {
+    type: "function",
+    function: {
+      name: "v0_create_chat",
+      description: "Start a new v0 chat to generate UI components or apps. Returns the generated preview URL and chat ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          prompt: { type: "string" },
+          project_id: { type: "string" },
+          model: { type: "string" },
+          privacy: { type: "string", enum: ["private", "team", "public"] }
+        },
+        required: ["prompt"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "v0_send_message",
+      description: "Send a follow-up message to an existing v0 chat.",
+      parameters: {
+        type: "object",
+        properties: { chat_id: { type: "string" }, message: { type: "string" } },
+        required: ["chat_id", "message"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "v0_get_files",
+      description: "Get the raw generated code files from a v0 chat.",
+      parameters: { type: "object", properties: { chat_id: { type: "string" } }, required: ["chat_id"] }
+    }
+  },
+
+  // 3. Deployments
+  {
+    type: "function",
+    function: {
       name: "v0_deploy",
       description: "Deploy a v0 project to Vercel.",
       parameters: {
         type: "object",
-        properties: {
-          project_id: { type: "string" },
-          chat_id: { type: "string" },
-          version_id: { type: "string" }
-        },
+        properties: { project_id: { type: "string" }, chat_id: { type: "string" }, version_id: { type: "string" } },
         required: ["project_id", "chat_id", "version_id"]
       }
+    }
+  },
+
+  // 4. Vercel Integration
+  {
+    type: "function",
+    function: {
+      name: "v0_vercel_list",
+      description: "List Vercel integration projects linked to v0.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+
+  // 5. Account
+  {
+    type: "function",
+    function: {
+      name: "v0_rate_limits",
+      description: "Check your v0 API rate limits and remaining credits.",
+      parameters: { type: "object", properties: {} }
     }
   }
 ];
@@ -77,17 +144,35 @@ export async function handleV0ToolCall(toolCall: any): Promise<string> {
   console.log(`[V0 Tool] Executing ${name} with payload:`, args);
 
   switch (name) {
-    case "v0_create_chat":
-      if (args.project_id) {
-        return await runV0Command("create-chat", args.prompt, "--project", args.project_id);
-      }
-      return await runV0Command("create-chat", args.prompt);
-
+    case "v0_create_project":
+      return await runV0Command("create-project", args.name, args.description || "");
     case "v0_list_projects":
       return await runV0Command("list-projects");
+    case "v0_get_project":
+      return await runV0Command("get-project", args.project_id);
+    case "v0_delete_project":
+      return await runV0Command("delete-project", args.project_id, "--confirm");
+
+    case "v0_create_chat":
+      const chatArgs = [args.prompt];
+      if (args.project_id) chatArgs.push("--project", args.project_id);
+      if (args.model) chatArgs.push("--model", args.model);
+      if (args.privacy) chatArgs.push("--privacy", args.privacy);
+      return await runV0Command("create-chat", ...chatArgs);
+
+    case "v0_send_message":
+      return await runV0Command("send-message", args.chat_id, args.message);
+    case "v0_get_files":
+      return await runV0Command("get-files", args.chat_id);
 
     case "v0_deploy":
       return await runV0Command("deploy", args.project_id, args.chat_id, args.version_id);
+
+    case "v0_vercel_list":
+      return await runV0Command("vercel-list");
+
+    case "v0_rate_limits":
+      return await runV0Command("rate-limits");
 
     default:
       return "Unknown V0 command.";
