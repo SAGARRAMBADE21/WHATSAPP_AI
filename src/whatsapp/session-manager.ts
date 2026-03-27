@@ -162,6 +162,15 @@ export class SessionManager {
                 const phoneNumber = sock.user?.id?.split(':')[0] || sock.user?.id?.split('@')[0] || '';
                 console.log(chalk.green(`[Session ${sessionId}] Connected! Phone: ${phoneNumber}`));
 
+                // Link the phone number to the user's email account
+                // (sessionId is the user's email passed from the frontend JWT)
+                if (phoneNumber && sessionId.includes('@')) {
+                    const linked = await this.userManager.linkPhoneNumberToEmail(sessionId, phoneNumber);
+                    if (linked) {
+                        console.log(chalk.green(`[Session ${sessionId}] Linked WhatsApp phone ${phoneNumber} to account ${sessionId}`));
+                    }
+                }
+
                 this.sessions.set(sessionId, {
                     sessionId,
                     socket: sock,
@@ -320,61 +329,27 @@ export class SessionManager {
             const session = this.sessions.get(sessionId);
             if (!session) return;
 
+            // Auto-link phone to email if user completed Google OAuth
+            let isRegistered = false;
             try {
-                // Check if user is registered using UserManager (source of truth)
-                const isRegistered = await this.userManager.isUserRegistered(userNumber);
-                console.log(chalk.gray(`[Session ${sessionId}] User ${userNumber} registered: ${isRegistered}`));
-
-                // Keep session doc in sync with actual registration status
-                if (isRegistered) {
-                    await this.sessionCollection.updateOne(
-                        { sessionId },
-                        { $set: { googleConnected: true, lastActive: new Date() } }
-                    );
-                }
-
-                if (text.toLowerCase().startsWith('/register')) {
-                    if (isRegistered) {
-                        await sock.sendMessage(replyJid, {
-                            text: '✅ You\'re already registered! Your Google Workspace is connected.\n\nSend any message to get started, or /status to see your info.',
-                        });
-                        return;
+                const existingUser = await this.userManager.getUserByPhone(userNumber);
+                if (existingUser && existingUser.registration_status === 'completed') {
+                    isRegistered = true;
+                } else if (!existingUser && sessionId.includes('@')) {
+                    // Phone not linked yet — try to link to the email (sessionId)
+                    const userByEmail = await this.userManager.getUserByEmail(sessionId);
+                    if (userByEmail && userByEmail.registration_status === 'completed') {
+                        await this.userManager.linkPhoneNumberToEmail(sessionId, userNumber);
+                        console.log(chalk.green(`[Session ${sessionId}] Auto-linked phone ${userNumber} to ${sessionId}`));
+                        isRegistered = true;
                     }
-                    // Start registration with the REAL phone number
-                    const userPhoneNumber = userNumber;
-                    console.log(chalk.yellow(`[Session ${sessionId}] Starting registration for phone: ${userPhoneNumber}`));
-                    await this.userManager.startRegistration(userPhoneNumber);
-
-                    // Generate short redirect URL using phone number (not session ID!)
-                    const shortAuthUrl = `http://localhost:3000/auth/start?session=${userPhoneNumber}`;
-                    console.log(chalk.yellow(`[Session ${sessionId}] Sending short auth URL...`));
-                    await sock.sendMessage(replyJid, {
-                        text: `🔐 *Connect Google Workspace*\n\nClick this link to connect your Google account:\n${shortAuthUrl}\n\n⏱️ Link expires in 15 minutes.`,
-                    });
-                    console.log(chalk.green(`[Session ${sessionId}] Auth URL sent!`));
-                    return;
                 }
-
-                if (text.toLowerCase().startsWith('/status')) {
-                    const user = await this.userManager.getUser(userNumber);
-                    await sock.sendMessage(replyJid, {
-                        text: `📊 *Session Status*\n\n🆔 Session: ${sessionId}\n📱 Phone: ${session.phoneNumber || 'N/A'}\n🔗 Google: ${isRegistered ? '✅ Connected' : '❌ Not connected'}${isRegistered && user ? `\n📧 Email: ${user.email || 'N/A'}\n👤 Name: ${user.name || 'N/A'}` : ''}\n\n${isRegistered ? 'You\'re all set! Send any message to manage your workspace.' : 'Send /register to connect Google Workspace.'}`,
-                    });
-                    return;
-                }
-
-                // For any other message, send welcome if NOT registered
-                if (!isRegistered) {
-                    console.log(chalk.yellow(`[Session ${sessionId}] User not registered, sending welcome...`));
-                    await sock.sendMessage(replyJid, {
-                        text: '👋 Welcome to Workspace Navigator!\n\n🔗 First, connect your Google account:\n📝 Send: /register\n\nOnce connected, you can manage Gmail, Calendar, Drive, Sheets, Docs — all from here!',
-                    });
-                    console.log(chalk.green(`[Session ${sessionId}] Welcome message sent!`));
-                    return;
-                }
-            } catch (sendError: any) {
-                console.error(chalk.red(`[Session ${sessionId}] SEND ERROR: ${sendError.message}`));
-                console.error(chalk.red(`[Session ${sessionId}] Stack: ${sendError.stack}`));
+                await this.sessionCollection.updateOne(
+                    { sessionId },
+                    { $set: { googleConnected: isRegistered, lastActive: new Date() } }
+                );
+            } catch (autoRegErr: any) {
+                console.error(chalk.red(`[Session ${sessionId}] Auto-register error: ${autoRegErr.message}`));
             }
 
             // Process with AI agent

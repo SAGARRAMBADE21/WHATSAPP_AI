@@ -205,32 +205,14 @@ export class WhatsAppClient {
             if (cleanText.toLowerCase().startsWith('/register')) {
                 console.log(chalk.magenta(`[DEBUG] Handling /register command for ${phoneNumber}`));
                 try {
-                    console.log(chalk.magenta(`[DEBUG] Calling userManager.startRegistration...`));
-                    const authUrl = await this.userManager.startRegistration(phoneNumber);
-
-                    // Print the full URL to console for easy copying
-                    console.log(chalk.bold.cyan('\n════════════════════════════════════════════════════════════'));
-                    console.log(chalk.bold.green('📱 GOOGLE AUTHORIZATION LINK'));
-                    console.log(chalk.bold.cyan('════════════════════════════════════════════════════════════'));
-                    console.log(chalk.bold.white('\n👉 Open this link IN YOUR COMPUTER BROWSER (not on phone):'));
-                    console.log(chalk.bold.yellow(`\n${authUrl}\n`));
-                    console.log(chalk.gray('   (Link also sent to WhatsApp)'));
-                    console.log(chalk.bold.cyan('════════════════════════════════════════════════════════════\n'));
-
-                    const response = `🔐 *Connect Your Google Workspace*\n\n` +
-                        `Click this link to authorize:\n${authUrl}\n\n` +
-                        `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-                        `📌 *Option 1 (Recommended):*\n` +
-                        `Open this link on your *COMPUTER* browser.\n` +
-                        `It will complete automatically.\n\n` +
-                        `📌 *Option 2 (From Phone):*\n` +
-                        `1. Open the link above\n` +
-                        `2. Sign in with Google\n` +
-                        `3. After "This site can't be reached" page appears\n` +
-                        `4. Copy the URL from your browser address bar\n` +
-                        `5. Send it here: /code PASTE_URL_HERE\n` +
-                        `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-                        `⏰ Link expires in 30 minutes`;
+                    const response = `🔐 *Workspace Navigator Security*\n\n` +
+                        `We have upgraded to a secure web dashboard.\n\n` +
+                        `To connect your Google Workspace:\n` +
+                        `1. Open your computer browser\n` +
+                        `2. Go to: *http://localhost:3000*\n` +
+                        `3. Sign in with Google\n` +
+                        `4. Scan the QR code displayed on the dashboard\n\n` +
+                        `Your WhatsApp will be securely linked to your account!`;
 
                     console.log(chalk.magenta(`[DEBUG] Sending response to ${targetJid}...`));
                     const result = await this.socket?.sendMessage(targetJid, { text: response });
@@ -239,77 +221,6 @@ export class WhatsAppClient {
                     return;
                 } catch (error: any) {
                     console.error(chalk.red(`[DEBUG] Registration error:`), error);
-                    const errResult = await this.socket?.sendMessage(targetJid, {
-                        text: `❌ Registration error: ${error.message}\n\nPlease try again or contact support.`
-                    });
-                    if (errResult?.key?.id) this.sentMessageIds.add(errResult.key.id);
-                    return;
-                }
-            }
-
-            // Handle /code command - for phone users who can't reach localhost
-            if (cleanText.toLowerCase().startsWith('/code')) {
-                console.log(chalk.magenta(`[DEBUG] Handling /code command for ${phoneNumber}`));
-                try {
-                    let codeValue = cleanText.substring(5).trim();
-
-                    // If user pasted the full URL, extract the code parameter
-                    if (codeValue.includes('code=')) {
-                        try {
-                            // Handle both full URLs and partial URLs
-                            let urlStr = codeValue;
-                            if (!urlStr.startsWith('http')) {
-                                urlStr = 'http://localhost' + (urlStr.startsWith('/') ? '' : '/') + urlStr;
-                            }
-                            const parsedUrl = new URL(urlStr);
-                            codeValue = parsedUrl.searchParams.get('code') || codeValue;
-                        } catch {
-                            // If URL parsing fails, try regex extraction
-                            const match = codeValue.match(/code=([^&\s]+)/);
-                            if (match) codeValue = match[1];
-                        }
-                    }
-
-                    if (!codeValue) {
-                        const errMsg = `❌ Please provide the authorization code.\n\n` +
-                            `Usage: /code PASTE_URL_OR_CODE_HERE\n\n` +
-                            `After signing in with Google, copy the full URL from your browser and paste it here.`;
-                        const errResult = await this.socket?.sendMessage(targetJid, { text: errMsg });
-                        if (errResult?.key?.id) this.sentMessageIds.add(errResult.key.id);
-                        return;
-                    }
-
-                    console.log(chalk.cyan(`[OAuth] Processing code from WhatsApp for ${phoneNumber}: ${codeValue.substring(0, 15)}...`));
-
-                    // Exchange code for tokens
-                    const success = await this.userManager.completeRegistrationWithCode(phoneNumber, codeValue);
-
-                    if (success) {
-                        const successMsg = `✅ *Registration Complete!*\n\n` +
-                            `Your Google Workspace is now connected.\n\n` +
-                            `You can now:\n` +
-                            `📧 Manage Gmail\n` +
-                            `📅 Control Calendar\n` +
-                            `📁 Access Drive\n` +
-                            `📊 Work with Sheets\n` +
-                            `📄 Edit Docs\n\n` +
-                            `Send any message to get started!`;
-                        const successResult = await this.socket?.sendMessage(targetJid, { text: successMsg });
-                        if (successResult?.key?.id) this.sentMessageIds.add(successResult.key.id);
-                    } else {
-                        const failMsg = `❌ Registration failed. The code may be expired.\n\n` +
-                            `Please send /register to get a new link and try again.`;
-                        const failResult = await this.socket?.sendMessage(targetJid, { text: failMsg });
-                        if (failResult?.key?.id) this.sentMessageIds.add(failResult.key.id);
-                    }
-                    return;
-                } catch (error: any) {
-                    console.error(chalk.red(`[DEBUG] Code exchange error:`), error);
-                    const errResult = await this.socket?.sendMessage(targetJid, {
-                        text: `❌ Error processing code: ${error.message}\n\nPlease send /register to get a new link.`
-                    });
-                    if (errResult?.key?.id) this.sentMessageIds.add(errResult.key.id);
-                    return;
                 }
             }
 
@@ -325,7 +236,7 @@ export class WhatsAppClient {
 
             if (cleanText.toLowerCase().startsWith('/status')) {
                 const isRegistered = await this.userManager.isUserRegistered(phoneNumber);
-                const user = await this.userManager.getUser(phoneNumber);
+                const user = await this.userManager.getUserByPhone(phoneNumber);
                 const response = isRegistered && user
                     ? `✅ **Registered**\n\n` +
                     `📧 Email: ${user.email}\n` +
@@ -353,48 +264,7 @@ export class WhatsAppClient {
                 messageId,
             };
 
-            // Start check for registration status
-            const isRegistered = await this.userManager.isUserRegistered(phoneNumber);
-            if (!isRegistered) {
-                // If not registered, send helpful registration prompt
-                console.log(chalk.gray(`[WhatsApp] Message from unregistered user: ${phoneNumber}, sending registration prompt`));
-                console.log(chalk.yellow(`[DEBUG] JID: ${jid}, isSelfChat: ${isSelfChat}, isGroup: ${isGroup}`));
-
-                // Send typing indicator
-                await this.socket?.sendPresenceUpdate('composing', jid);
-
-                const welcomeMessage = `👋 Welcome to Workspace Navigator!\n\n` +
-                    `🤖 I'm your AI assistant for Google Workspace\n\n` +
-                    `To get started, you need to connect your Google account:\n` +
-                    `📝 Send: /register\n\n` +
-                    `Once connected, you can:\n` +
-                    `📧 Manage Gmail\n` +
-                    `📅 Control Calendar\n` +
-                    `📁 Access Drive\n` +
-                    `📊 Work with Sheets\n` +
-                    `📄 Edit Docs\n` +
-                    `🎓 Manage Classroom\n\n` +
-                    `All through natural language commands!`;
-
-                try {
-                    console.log(chalk.magenta(`[DEBUG] Attempting to send to JID: ${targetJid}`));
-                    console.log(chalk.magenta(`[DEBUG] Socket exists: ${!!this.socket}`));
-
-                    await this.socket?.sendPresenceUpdate('paused', targetJid);
-                    const result = await this.socket?.sendMessage(targetJid, { text: welcomeMessage });
-
-                    // Track sent message ID
-                    if (result?.key?.id) {
-                        this.sentMessageIds.add(result.key.id);
-                    }
-
-                    console.log(chalk.green(`[WhatsApp] ✓ Welcome message sent to ${phoneNumber}`));
-                    console.log(chalk.magenta(`[DEBUG] Send result:`, JSON.stringify(result, null, 2)));
-                } catch (error) {
-                    console.error(chalk.red(`[WhatsApp] ✖ Failed to send welcome message:`), error);
-                }
-                return;
-            }
+            // No registration gate — process all messages directly
 
             console.log(chalk.cyan(`[DEBUG] Calling agent.handleMessage...`));
             let response: string;

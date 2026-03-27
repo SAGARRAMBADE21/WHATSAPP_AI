@@ -2,7 +2,7 @@
 
 **AI-Powered Google Workspace Assistant via WhatsApp**
 
-Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through natural language WhatsApp messages. Workspace Navigator is an intelligent AI agent that understands your requests and executes tasks on your behalf.
+Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets, Docs, Classroom) through natural language WhatsApp messages. Workspace Navigator is a multi-user AI agent with secure Google OAuth login, per-user isolation, and a real-time web dashboard.
 
 ![Workspace Navigator](./doc/whatsapp-slack.png)
 
@@ -18,12 +18,20 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 - [Configuration](#configuration)
 - [Usage](#usage)
 - [Available Commands](#available-commands)
+- [Security](#security)
 - [Project Structure](#project-structure)
 - [How It Works](#how-it-works)
 
 ---
 
 ## Features
+
+### Multi-User System
+- **Google OAuth Login** - Secure sign-in via Google (no passwords stored)
+- **Separate Register & Sign In** pages for new and returning users
+- **Per-User Isolation** - Each user gets their own Google tokens, WhatsApp session, tools, and memory
+- **Real-time Dashboard** - Live connection status, activity feed, and API key management
+- **JWT Sessions** - 7-day token expiry with automatic renewal
 
 ### Gmail Management
 - Send emails with natural language commands
@@ -53,13 +61,25 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 - Update individual cells
 - Append new rows
 
+### Google Docs
+- Create new documents
+- Read document content
+- Append text to documents
+
+### Google Classroom
+- List courses
+- View assignments
+- Post announcements
+
+### Advanced AI Tools
+- **Manus AI** - Cloud tasks, autonomous agents, desktop control (requires API key)
+- **v0 by Vercel** - AI-powered UI generation, project management, deployment (requires API key)
+- Per-user API keys stored with AES-256-GCM encryption
+
 ### Intelligent Features
-- **Natural Language Understanding**: Uses OpenAI's GPT-5.1 to interpret casual requests
+- **Natural Language Understanding**: Uses OpenAI GPT to interpret casual requests
 - **Context Awareness**: Maintains conversation history for follow-up questions
-- **Memory System**: 
-  - Short-term: Recent conversation context
-  - Working: Current task parameters
-  - Long-term: User preferences and frequent contacts
+- **Memory System**: Short-term, working, and long-term memory (MongoDB-backed)
 - **Smart Clarification**: Asks for details when requests are ambiguous
 - **Error Recovery**: Graceful error handling with user-friendly messages
 
@@ -67,42 +87,54 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 
 ## Architecture
 
-![System Architecture](./doc/architecture_diagram.png)
-
 ### Component Breakdown
 
-1. **WhatsApp Client** (`src/whatsapp/client.ts`)
-   - Manages WhatsApp connection using Baileys library
-   - Handles QR code authentication
-   - Message parsing and routing
-   - Supports both private and group chats (with @nav prefix)
+1. **Web Dashboard** (`public/`)
+   - Landing page with 3D Spline background
+   - Google OAuth register/sign-in pages
+   - Real-time dashboard with Socket.IO
+   - WhatsApp QR code linking
+   - API key management
 
-2. **Agent Core** (`src/agent/core.ts`)
-   - Central orchestrator
+2. **OAuth Server** (`src/auth/oauth-server.ts`)
+   - HTTP server serving static files and API routes
+   - Google OAuth 2.0 flow with JWT token generation
+   - Protected API endpoints for user settings
+   - Socket.IO for real-time WhatsApp session management
+
+3. **Session Manager** (`src/whatsapp/session-manager.ts`)
+   - Multi-user WhatsApp session handling
+   - Auto-links phone numbers to Google accounts
+   - Session persistence and restoration via MongoDB
+   - Automatic reconnection on disconnects
+
+4. **Agent Core** (`src/agent/core.ts`)
+   - Central orchestrator for message processing
+   - Per-user tool registry with cached OAuth clients
    - Routes messages to NLP engine
-   - Executes tool calls
-   - Manages conversation flow
+   - Executes tool calls with user-specific credentials
 
-3. **NLP Engine** (`src/nlp/engine.ts`)
-   - Integrates with OpenAI GPT-5.1
+5. **NLP Engine** (`src/nlp/engine.ts`)
+   - Integrates with OpenAI GPT
    - Parses user intent from natural language
    - Generates structured tool calls
    - Returns clarification requests when needed
 
-4. **Memory Manager** (`src/memory/manager.ts`)
+6. **User Manager** (`src/auth/user-manager.ts`)
+   - MongoDB-backed user storage
+   - Google OAuth token management per user
+   - API key encryption/decryption (AES-256-GCM)
+   - Phone-to-email linking
+
+7. **Memory Manager** (`src/memory/manager.ts`)
    - **Short-term**: Last 10 conversation turns
    - **Working**: Current multi-step task state
-   - **Long-term**: SQLite database for user profiles, preferences, and history
+   - **Long-term**: MongoDB database for user profiles, preferences, and history
 
-5. **Tool Registry** (`src/tools/registry.ts`)
-   - Manages all available tools
-   - Tools for Gmail, Calendar, Drive, and Sheets
-   - Standardized execution interface
-
-6. **Google Auth Manager** (`src/google/auth.ts`)
-   - OAuth 2.0 flow
-   - Token refresh handling
-   - Automatic browser-based authorization
+8. **Tool Registry** (`src/tools/registry.ts`)
+   - Per-user tool instances with isolated Google API clients
+   - Gmail, Calendar, Drive, Sheets, Docs, Classroom tools
+   - Optional Manus AI and v0 by Vercel tools
 
 ---
 
@@ -110,13 +142,15 @@ Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets) through na
 
 | Category | Technology |
 |----------|-----------|
-| **Runtime** | Node.js (v18+) |
+| **Runtime** | Node.js 18+ |
 | **Language** | TypeScript |
-| **AI/NLP** | OpenAI GPT-5.1 |
+| **AI/NLP** | OpenAI GPT |
 | **WhatsApp** | @whiskeysockets/baileys |
 | **Google APIs** | googleapis (v144+) |
-| **Database** | SQLite (better-sqlite3) |
-| **Logging** | Pino |
+| **Database** | MongoDB (Atlas or local) |
+| **Auth** | Google OAuth 2.0, JWT, AES-256-GCM |
+| **Real-time** | Socket.IO |
+| **Frontend** | Vanilla HTML/CSS/JS, Spline 3D |
 | **Build** | TypeScript Compiler |
 | **Dev Tools** | ts-node, nodemon |
 
@@ -131,23 +165,22 @@ Before you begin, ensure you have:
    node --version
    ```
 
-2. **npm** (comes with Node.js)
+2. **Python** 3.8+ (for Manus AI tools, optional)
    ```bash
-   npm --version
+   python --version
    ```
 
-3. **OpenAI API Key**
-   - Sign up at [OpenAI](https://platform.openai.com/)
-   - Generate an API key from your dashboard
+3. **MongoDB** - [MongoDB Atlas](https://www.mongodb.com/atlas) (free tier) or local MongoDB
 
-4. **Google Cloud Project**
+4. **OpenAI API Key** - Sign up at [OpenAI](https://platform.openai.com/)
+
+5. **Google Cloud Project**
    - Create a project in [Google Cloud Console](https://console.cloud.google.com/)
-   - Enable APIs: Gmail API, Calendar API, Drive API, Sheets API
-   - Create OAuth 2.0 credentials (Desktop app)
-   - Download client ID and client secret
+   - Enable APIs: Gmail, Calendar, Drive, Sheets, Docs, Classroom
+   - Create OAuth 2.0 credentials (Web application)
+   - Set redirect URI to `http://localhost:3000/oauth2callback`
 
-5. **WhatsApp Account**
-   - A valid WhatsApp account on your phone
+6. **WhatsApp Account** - A valid WhatsApp account on your phone
 
 ---
 
@@ -168,42 +201,37 @@ npm install
 
 ### 3. Configure Environment Variables
 
-Copy the example environment file:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
+Create a `.env` file:
 
 ```env
-# OpenAI Configuration
+# OpenAI
 OPENAI_API_KEY=sk-proj-...your-key-here
-OPENAI_MODEL=gpt-5.1
 
-# Google OAuth Configuration
+# Google OAuth (Web Application type)
 GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/oauth2callback
-GOOGLE_TOKEN_PATH=./auth/google_tokens.json
 
-# WhatsApp Configuration
-ALLOWED_NUMBERS=1234567890,0987654321  # Optional: Restrict access
-OWNER_NUMBER=1234567890  # Your WhatsApp number
-AUTH_STATE_PATH=./auth/baileys_auth
+# MongoDB
+MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/workspace_navigator
+MONGODB_DB_NAME=workspace_navigator
 
-# Memory & Storage
-MEMORY_DB_PATH=./data/memory/navigator.db
+# Security
+JWT_SECRET=your-random-jwt-secret-min-32-chars
+ENCRYPTION_KEY=your-random-encryption-key-min-32-chars
 
-# Logging
+# Optional
 LOG_LEVEL=info
 ```
 
-### 4. Build the Project
+### 4. Build and Run
 
 ```bash
 npm run build
+npm start
 ```
+
+The server starts at **http://localhost:3000**.
 
 ---
 
@@ -218,132 +246,99 @@ npm run build
    - Google Calendar API
    - Google Drive API
    - Google Sheets API
-
+   - Google Docs API
+   - Google Classroom API
 4. **Create OAuth Credentials**:
-   - Navigate to "APIs & Services" → "Credentials"
-   - Click "Create Credentials" → "OAuth client ID"
-   - Choose "Desktop app"
-   - Download the credentials
+   - Navigate to "APIs & Services" > "Credentials"
+   - Click "Create Credentials" > "OAuth client ID"
+   - Choose **"Web application"**
+   - Add authorized redirect URI: `http://localhost:3000/oauth2callback`
    - Copy `client_id` and `client_secret` to `.env`
-
 5. **Configure OAuth Consent Screen**:
    - Add your email as a test user
-   - Add required scopes (the app will request these automatically)
-
-### WhatsApp Setup
-
-- The first time you run the app, it will display a QR code
-- Scan it with WhatsApp (Menu → Linked Devices → Link a Device)
-- Authentication persists in `./auth/baileys_auth`
-
-### Access Control
-
-To restrict access to specific phone numbers:
-
-```env
-ALLOWED_NUMBERS=1234567890,9876543210
-```
-
-Leave empty to allow all numbers:
-
-```env
-ALLOWED_NUMBERS=
-```
+   - Add required scopes (the app requests these automatically)
 
 ---
 
 ## Usage
 
-### Quick Start
+### User Flow
 
-1. **Install dependencies**:
-   ```bash
-   npm install
-   ```
-
-2. **Build the project**:
-   ```bash
-   npm run build
-   ```
-
-3. **Start the application**:
-   ```bash
-   npm start
-   ```
+1. Visit **http://localhost:3000** and click **Get Started**
+2. **Register** with your Google account (Google OAuth)
+3. On the **Dashboard**, scan the QR code with WhatsApp
+4. Your WhatsApp is now linked to your Google Workspace
+5. Send natural language messages on WhatsApp to manage your workspace
+6. Optionally add **Manus AI** and **v0** API keys on the dashboard for advanced features
 
 ### Running the App
 
-**Development Mode** (with auto-reload):
+**Production Mode**:
+```bash
+npm run build
+npm start
+```
+
+**Development Mode** (with hot reload):
 ```bash
 npm run dev
 ```
 
-**Production Mode**:
+**Development Mode** (with auto-restart):
 ```bash
-npm start
-```
-
-### First Run
-
-1. The app will validate your configuration
-2. Open browser for Google authorization (automatic)
-3. Grant permissions to Gmail, Calendar, Drive, Sheets
-4. Scan WhatsApp QR code with your phone
-5. Wait for "Workspace Navigator is Running" message
-
-### Sending Commands
-
-**Private Chat**: Just send a message
-```
-Send email to john@example.com with subject "Meeting Tomorrow" and body "Let's meet at 3 PM"
-```
-
-**Group Chat**: Use `@nav` prefix
-```
-@nav what are my meetings today?
+npm run dev:watch
 ```
 
 ---
 
 ## Available Commands
 
-### Gmail Commands
+### Natural Language (Just type naturally)
 
-| Command | Example |
-|---------|---------|
+| Action | Example |
+|--------|---------|
 | Send email | "Send email to alice@example.com about project status" |
-| Create draft | "Draft an email to bob@example.com saying I'll be late" |
+| Create draft | "Draft an email to bob saying I'll be late" |
 | Search emails | "Find emails from john about invoices" |
-| Read email | "Read email with ID 18a2f3c4d5e6f7g8" |
-| Delete email | "Delete email 18a2f3c4d5e6f7g8" |
-| Add label | "Label email 18a2f3c4d5e6f7g8 as 'Important'" |
-
-### Calendar Commands
-
-| Command | Example |
-|---------|---------|
-| Create event | "Schedule meeting tomorrow at 3 PM with Team Sync as title" |
+| Schedule event | "Schedule meeting tomorrow at 3 PM with Team Sync" |
 | List events | "What are my meetings today?" |
-| Update event | "Move my 3 PM meeting to 4 PM" |
-| Delete event | "Cancel my meeting with John" |
-
-### Drive Commands
-
-| Command | Example |
-|---------|---------|
-| Search files | "Find all PDFs about budget" |
+| Find files | "Find all PDFs about budget in Drive" |
 | Share file | "Share document xyz with alice@example.com" |
-| List folder | "List files in folder abc123" |
-| Create folder | "Create folder named 'Q1 Reports'" |
-| Delete file | "Delete file xyz123" |
+| Read sheet | "Read data from my expenses spreadsheet" |
+| Create doc | "Create a document called Meeting Notes" |
+| List courses | "List my Classroom courses" |
 
-### Sheets Commands
+### Special Commands
 
-| Command | Example |
-|---------|---------|
-| Read data | "Read data from spreadsheet abc123, range Sheet1!A1:C10" |
-| Write data | "Update cell B5 in spreadsheet abc123 to 'Complete'" |
-| Add row | "Add row ['John', '25', 'Engineer'] to spreadsheet abc123" |
+| Command | Description |
+|---------|-------------|
+| `/status` | Check your connection status and account info |
+| `/logout` | Disconnect and delete all stored data |
+
+---
+
+## Security
+
+| Layer | Mechanism |
+|-------|-----------|
+| **Authentication** | Google OAuth 2.0 (no passwords stored) |
+| **Sessions** | JWT tokens with 7-day expiry |
+| **API Key Storage** | AES-256-GCM encryption at rest in MongoDB |
+| **User Isolation** | Separate OAuth tokens, tool registries, and memory per user |
+| **Key Display** | Dashboard never exposes full API keys (masked with last 4 chars) |
+| **Token Security** | Per-user token files + MongoDB backup with refresh sync |
+| **Transport** | HTTPS recommended for production deployment |
+
+### Per-User Isolation
+
+Each user has completely isolated:
+- Google OAuth2 client and tokens
+- WhatsApp session
+- Tool registry (Gmail, Calendar, Drive, etc.)
+- Conversation memory and history
+- Manus AI and v0 API keys
+
+User A cannot access User B's data at any layer.
 
 ---
 
@@ -353,39 +348,48 @@ Send email to john@example.com with subject "Meeting Tomorrow" and body "Let's m
 whatsapp_slack/
 ├── src/
 │   ├── agent/
-│   │   └── core.ts              # Main agent orchestrator
+│   │   └── core.ts              # AI agent orchestrator (per-user tools)
+│   ├── auth/
+│   │   ├── oauth-server.ts      # HTTP server, OAuth, API routes
+│   │   ├── user-manager.ts      # User CRUD, token management
+│   │   └── crypto.ts            # AES-256-GCM encryption
 │   ├── google/
-│   │   └── auth.ts              # Google OAuth manager
+│   │   └── auth.ts              # Google OAuth client manager
 │   ├── memory/
 │   │   ├── manager.ts           # Memory orchestrator
 │   │   ├── short-term.ts        # Recent conversation history
 │   │   ├── working.ts           # Current task state
-│   │   └── long-term.ts         # Persistent SQLite storage
+│   │   └── long-term.ts         # MongoDB persistent storage
 │   ├── nlp/
-│   │   └── engine.ts            # OpenAI integration
+│   │   └── engine.ts            # OpenAI GPT integration
 │   ├── tools/
 │   │   ├── registry.ts          # Tool management
 │   │   ├── gmail.ts             # Gmail operations
 │   │   ├── calendar.ts          # Calendar operations
 │   │   ├── drive.ts             # Drive operations
-│   │   └── sheets.ts            # Sheets operations
+│   │   ├── sheets.ts            # Sheets operations
+│   │   ├── docs.ts              # Docs operations
+│   │   ├── classroom.ts         # Classroom operations
+│   │   ├── manus.ts             # Manus AI integration
+│   │   └── v0.ts                # v0 by Vercel integration
 │   ├── whatsapp/
-│   │   └── client.ts            # WhatsApp connection
-│   ├── types/
-│   │   └── qrcode-terminal.d.ts # Type definitions
+│   │   ├── client.ts            # WhatsApp connection (standalone)
+│   │   └── session-manager.ts   # Multi-user session manager
 │   ├── config.ts                # Configuration loader
 │   ├── types.ts                 # TypeScript interfaces
 │   └── index.ts                 # Application entry point
-├── auth/                        # Authentication data (gitignored)
-│   ├── baileys_auth/            # WhatsApp session
-│   └── google_tokens.json       # Google OAuth tokens
-├── data/                        # Application data (gitignored)
-│   └── memory/
-│       └── navigator.db         # SQLite database
+├── public/
+│   ├── index.html               # Landing page (Spline 3D)
+│   ├── register.html            # New user registration
+│   ├── login.html               # Returning user sign-in
+│   └── dashboard.html           # Real-time user dashboard
+├── skills/
+│   ├── manus-computer/          # Manus AI CLI scripts
+│   └── v0skill/                 # v0 by Vercel CLI scripts
+├── data/                        # Session data (gitignored)
 ├── dist/                        # Compiled JavaScript (gitignored)
-├── doc/                         # Documentation and diagrams
+├── dns-preload.js               # DNS fix for MongoDB Atlas SRV
 ├── .env                         # Environment variables (gitignored)
-├── .env.example                 # Environment template
 ├── package.json                 # Dependencies
 ├── tsconfig.json                # TypeScript configuration
 └── README.md                    # This file
@@ -397,24 +401,28 @@ whatsapp_slack/
 
 ### Message Flow
 
+```
+User sends WhatsApp message
+  → Session Manager receives message
+  → Auto-links phone to Google account (if needed)
+  → Agent Core loads per-user tool registry
+  → NLP Engine (OpenAI) interprets intent
+  → Tool executed with user's Google OAuth tokens
+  → Response sent back to WhatsApp
+```
+
+### Detailed Flow
+
 1. **User sends WhatsApp message**
    ```
    "Send email to alice@example.com about the report"
    ```
 
-2. **WhatsApp Client receives and validates**
-   - Checks if sender is authorized
-   - Extracts text content
-   - Removes @nav prefix if in group
+2. **Session Manager** receives the message, identifies the user by phone number, and routes to the AI agent
 
-3. **Agent Core processes**
-   - Retrieves user profile from memory
-   - Loads conversation history
-   - Fetches relevant context from long-term memory
+3. **Agent Core** loads the user's specific tool registry with their Google OAuth credentials
 
-4. **NLP Engine interprets**
-   - Sends to OpenAI with system prompt
-   - Receives structured tool call:
+4. **NLP Engine** sends the message to OpenAI with conversation history and available tools, receiving a structured tool call:
    ```json
    {
      "tool_name": "gmail_send_email",
@@ -426,15 +434,9 @@ whatsapp_slack/
    }
    ```
 
-5. **Tool Registry executes**
-   - Finds `gmail_send_email` tool
-   - Executes with Google API
-   - Returns result
+5. **Tool Registry** finds `gmail_send_email`, executes it using the user's authenticated Google API client
 
-6. **Agent responds**
-   - Formats success/error message
-   - Saves to memory
-   - Sends WhatsApp reply:
+6. **Agent responds** with a formatted message sent back to WhatsApp:
    ```
    Email sent successfully to alice@example.com
    Subject: "Report"
@@ -442,22 +444,37 @@ whatsapp_slack/
 
 ### Memory System
 
-**Short-term Memory** (In-memory)
-- Last 10 conversation turns
-- Used for context in follow-up questions
-- Example: "Send it to Bob too" → knows "it" refers to previous email
-
-**Working Memory** (In-memory)
-- Current multi-step task state
-- Missing parameters from incomplete requests
-- Session expires after 30 minutes of inactivity
-
-**Long-term Memory** (SQLite)
-- User profiles and preferences
-- Tool call history
-- Frequently contacted emails
-- Semantic search for relevant context
+| Type | Storage | Duration | Purpose |
+|------|---------|----------|---------|
+| **Short-term** | In-memory | Last 10 turns | Follow-up context ("Send it to Bob too") |
+| **Working** | In-memory | 30 min timeout | Multi-step task state |
+| **Long-term** | MongoDB | Persistent | User profiles, preferences, history |
 
 ---
 
+## Deployment
 
+### Docker
+
+```bash
+docker-compose up -d
+```
+
+### PM2 (Production)
+
+```bash
+npm run build
+pm2 start dist/index.js --name workspace-navigator -- --require ./dns-preload.js
+```
+
+See `docker-compose.yml` and `doc/` for detailed deployment guides.
+
+---
+
+## License
+
+MIT
+
+---
+
+Made by [Sagar Rambade](https://github.com/SAGARRAMBADE21)

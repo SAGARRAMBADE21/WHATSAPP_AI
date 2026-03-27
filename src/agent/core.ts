@@ -59,6 +59,12 @@ export class AgentCore {
             userTools.register(tool)
         );
 
+        // Fetch user-specific encrypted API keys from MongoDB (keyed by email)
+        const userDoc = await this.userManager.getUserByPhone(phoneNumber);
+        const apiKeys = userDoc?.email
+            ? await this.userManager.getApiKeys(userDoc.email)
+            : { manusKey: undefined, v0Key: undefined };
+
         // Register Global API Tools (Manus & V0)
         manusTools.forEach(def => {
             userTools.register({
@@ -66,7 +72,7 @@ export class AgentCore {
                 description: def.function.description,
                 parameters: def.function.parameters,
                 execute: async (args: any, context: ExecutionContext) => {
-                    const result = await handleManusToolCall({ function: { name: def.function.name, arguments: JSON.stringify(args) } });
+                    const result = await handleManusToolCall({ function: { name: def.function.name, arguments: JSON.stringify(args) } }, apiKeys.manusKey);
                     return { success: true, message: result };
                 }
             });
@@ -78,7 +84,7 @@ export class AgentCore {
                 description: def.function.description,
                 parameters: def.function.parameters,
                 execute: async (args: any, context: ExecutionContext) => {
-                    const result = await handleV0ToolCall({ function: { name: def.function.name, arguments: JSON.stringify(args) } });
+                    const result = await handleV0ToolCall({ function: { name: def.function.name, arguments: JSON.stringify(args) } }, apiKeys.v0Key);
                     return { success: true, message: result };
                 }
             });
@@ -93,20 +99,21 @@ export class AgentCore {
     async handleMessage(message: IncomingMessage, phoneNumber: string): Promise<string> {
         const { senderId, senderName, text } = message;
 
-        // Check if user is registered
+        // Get user-specific tool registry (loads per-user Google OAuth tokens)
+        let userTools: ToolRegistry | null = null;
         const isRegistered = await this.userManager.isUserRegistered(phoneNumber);
-        if (!isRegistered) {
-            return '⚠️ You need to register first!\n\n' +
-                '📝 Send /register to connect your Google Workspace\n' +
-                '🔐 You will get a secure link to authorize access';
+        if (isRegistered) {
+            userTools = await this.getUserToolRegistry(phoneNumber);
         }
 
-        // Get user-specific tool registry
-        const userTools = await this.getUserToolRegistry(phoneNumber);
         if (!userTools) {
-            return '🔒 Your Google connection has expired and needs to be renewed.\n\n' +
-                '📝 Send /register to reconnect your Google Workspace.\n' +
-                '⏱️ This takes less than 30 seconds!';
+            // User hasn't completed Google OAuth yet — direct them to the web dashboard
+            return '🔐 *Google Workspace Not Connected*\n\n' +
+                'To use Gmail, Calendar, Drive, Sheets & Docs:\n' +
+                '1. Open *http://localhost:3000* in your browser\n' +
+                '2. Sign in with Google\n' +
+                '3. Scan the QR code on the dashboard\n\n' +
+                'Your WhatsApp will be automatically linked!';
         }
 
         // Ensure user profile exists

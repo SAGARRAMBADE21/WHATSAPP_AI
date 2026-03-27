@@ -8,15 +8,18 @@ dotenv.config();
 const execAsync = promisify(exec);
 const V0_SCRIPT = path.resolve(__dirname, "../../skills/v0skill/scripts/v0_platform.mjs");
 
-async function runV0Command(command: string, ...args: string[]): Promise<string> {
+async function runV0Command(apiKey: string | undefined, command: string, ...args: string[]): Promise<string> {
   try {
     const safeArgs = args.map(arg => {
       if (arg === undefined || arg === null) return "";
       return `"${String(arg).replace(/"/g, '\\"')}"`;
     }).join(" ");
     
+    const env = { ...process.env };
+    if (apiKey) env.V0_API_KEY = apiKey;
+
     const { stdout, stderr } = await execAsync(`node "${V0_SCRIPT}" ${command} ${safeArgs}`, {
-      env: { ...process.env },
+      env
     });
     return stdout || stderr;
   } catch (error: any) {
@@ -137,7 +140,7 @@ export const v0Tools = [
   }
 ];
 
-export async function handleV0ToolCall(toolCall: any): Promise<string> {
+export async function handleV0ToolCall(toolCall: any, apiKey?: string): Promise<string> {
   const { name, arguments: argsString } = toolCall.function;
   const args = JSON.parse(argsString);
 
@@ -145,34 +148,34 @@ export async function handleV0ToolCall(toolCall: any): Promise<string> {
 
   switch (name) {
     case "v0_create_project":
-      return await runV0Command("create-project", args.name, args.description || "");
+      return await runV0Command(apiKey, "create-project", args.name, args.description || "");
     case "v0_list_projects":
-      return await runV0Command("list-projects");
+      return await runV0Command(apiKey, "list-projects");
     case "v0_get_project":
-      return await runV0Command("get-project", args.project_id);
+      return await runV0Command(apiKey, "get-project", args.project_id);
     case "v0_delete_project":
-      return await runV0Command("delete-project", args.project_id, "--confirm");
+      return await runV0Command(apiKey, "delete-project", args.project_id, "--confirm");
 
     case "v0_create_chat":
       const chatArgs = [args.prompt];
       if (args.project_id) chatArgs.push("--project", args.project_id);
       if (args.model) chatArgs.push("--model", args.model);
       if (args.privacy) chatArgs.push("--privacy", args.privacy);
-      return await runV0Command("create-chat", ...chatArgs);
+      return await runV0Command(apiKey, "create-chat", ...chatArgs);
 
     case "v0_send_message":
-      return await runV0Command("send-message", args.chat_id, args.message);
+      return await runV0Command(apiKey, "send-message", args.chat_id, args.message);
     case "v0_get_files":
-      return await runV0Command("get-files", args.chat_id);
+      return await runV0Command(apiKey, "get-files", args.chat_id);
 
     case "v0_deploy":
-      return await runV0Command("deploy", args.project_id, args.chat_id, args.version_id);
+      return await runV0Command(apiKey, "deploy", args.project_id, args.chat_id, args.version_id);
 
     case "v0_vercel_list":
-      return await runV0Command("vercel-list");
+      return await runV0Command(apiKey, "vercel-list");
 
     case "v0_rate_limits":
-      return await runV0Command("rate-limits");
+      return await runV0Command(apiKey, "rate-limits");
 
     default:
       return "Unknown V0 command.";

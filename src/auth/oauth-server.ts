@@ -5,6 +5,9 @@ import fs from 'fs';
 import { Server as SocketIOServer } from 'socket.io';
 import { UserManager } from './user-manager';
 import chalk from 'chalk';
+import jwt from 'jsonwebtoken';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-jwt-secret-do-not-use-in-prod';
 
 const MIME_TYPES: Record<string, string> = {
     '.html': 'text/html; charset=utf-8',
@@ -40,24 +43,92 @@ export class OAuthCallbackServer {
                 try {
                     const url = new URL(req.url!, `http://localhost:${this.port}`);
 
-                    // ── Auth start redirect (short URL for WhatsApp) ──
-                    if (url.pathname === '/auth/start') {
-                        const sessionId = url.searchParams.get('session');
-                        if (!sessionId) {
-                            res.writeHead(400, { 'Content-Type': 'text/html' });
-                            res.end('<h1>400 - Missing session parameter</h1>');
-                            return;
+                    // Helper to parse JSON body
+                    const parseBody = (): Promise<any> => {
+                        return new Promise((resolve) => {
+                            let body = '';
+                            req.on('data', chunk => body += chunk.toString());
+                            req.on('end', () => {
+                                try { resolve(JSON.parse(body)); }
+                                catch (e) { resolve({}); }
+                            });
+                        });
+                    };
+
+                    // Helper to verify JWT and get user email
+                    const getAuthenticatedUser = (): string | null => {
+                        const authHeader = req.headers.authorization;
+                        if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+                        try {
+                            const token = authHeader.split(' ')[1];
+                            const decoded = jwt.verify(token, JWT_SECRET) as any;
+                            return decoded.email;
+                        } catch {
+                            return null;
                         }
-                        console.log(chalk.cyan(`[OAuth] Redirect request for session: ${sessionId}`));
-                        const oauthUrl = this.userManager.generateAuthUrl(sessionId);
-                        console.log(chalk.cyan(`[OAuth] Redirecting to Google OAuth (${oauthUrl.length} chars)`));
+                    };
+
+                    // ── API ROUTES ──
+                    if (url.pathname.startsWith('/api/')) {
+                        res.setHeader('Content-Type', 'application/json');
+
+                        if (req.method === 'GET' && url.pathname === '/api/user/settings') {
+                            const email = getAuthenticatedUser();
+                            if (!email) {
+                                res.writeHead(401);
+                                return res.end(JSON.stringify({ error: 'Unauthorized' }));
+                            }
+                            // Fetch full user record to get linked phone number
+                            const user = await this.userManager.getUserByEmail(email);
+                            
+                            const keys = await this.userManager.getApiKeys(email);
+                            // Only return masked keys for security
+                            const maskedManus = keys.manusKey ? '••••••••' + keys.manusKey.slice(-4) : '';
+                            const maskedV0 = keys.v0Key ? '••••••••' + keys.v0Key.slice(-4) : '';
+                            res.writeHead(200);
+                            return res.end(JSON.stringify({ 
+                                success: true, 
+                                email: email,
+                                phoneNumber: user?.phone_number || null,
+                                manusKey: maskedManus, 
+                                v0Key: maskedV0 
+                            }));
+                        }
+
+                        if (req.method === 'POST' && url.pathname === '/api/user/settings') {
+                            const email = getAuthenticatedUser();
+                            if (!email) {
+                                res.writeHead(401);
+                                return res.end(JSON.stringify({ error: 'Unauthorized' }));
+                            }
+                            const body = await parseBody();
+                            
+                            // Only pass defined keys to prevent overwriting with empties inadvertently
+                            const manusUpdate = body.manusKey && !body.manusKey.includes('••••') ? body.manusKey : undefined;
+                            const v0Update = body.v0Key && !body.v0Key.includes('••••') ? body.v0Key : undefined;
+                            
+                            await this.userManager.saveApiKeys(email, manusUpdate, v0Update);
+                            res.writeHead(200);
+                            return res.end(JSON.stringify({ success: true }));
+                        }
+
+                        res.writeHead(404);
+                        return res.end(JSON.stringify({ error: 'Route not found' }));
+                    }
+
+                    // ── Auth start redirect (Google OAuth for Web login) ──
+                    if (url.pathname === '/auth/start') {
+                        const mode = url.searchParams.get('mode') || 'signin';
+                        console.log(chalk.cyan(`[OAuth] Redirect request for web ${mode}`));
+                        const oauthUrl = await this.userManager.startRegistration();
+                        console.log(chalk.cyan(`[OAuth] Redirecting to Google OAuth`));
                         res.writeHead(302, { 'Location': oauthUrl });
                         res.end();
                         return;
                     }
 
                     // ── Serve landing page and static files ──
-                    if (!url.pathname.includes('oauth2callback')) {
+                    if (!url.pathname.includes('oauth2callback') && !url.pathname.includes('/auth/callback')) {
                         const publicDir = path.resolve(__dirname, '../../public');
 
                         // Serve index.html for root path
@@ -90,7 +161,6 @@ export class OAuthCallbackServer {
                     }
 
                     const code = url.searchParams.get('code');
-                    const state = url.searchParams.get('state');
                     const error = url.searchParams.get('error');
 
                     // Handle OAuth errors
@@ -110,16 +180,18 @@ export class OAuthCallbackServer {
                     }
 
                     console.log(chalk.cyan(`[OAuth] Received callback with code: ${code.substring(0, 10)}...`));
-                    if (state) {
-                        console.log(chalk.cyan(`[OAuth] State parameter (phone): ${state}`));
-                    }
 
                     // Exchange code for tokens and complete registration
-                    const success = await this.handleOAuthCallback(code, state || undefined);
+                    const userProfile = await this.userManager.handleGoogleCallback(code);
 
-                    if (success) {
-                        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-                        res.end(this.getSuccessPage());
+                    if (userProfile) {
+                        // Generate JWT token containing the authenticated email
+                        const token = jwt.sign({ email: userProfile.email }, JWT_SECRET, { expiresIn: '7d' });
+                        
+                        console.log(chalk.green(`[OAuth] Registration complete for ${userProfile.email}. Redirecting to dashboard.`));
+                        // Redirect to the dashboard with the token as a query parameter
+                        res.writeHead(302, { 'Location': `/dashboard.html?token=${token}` });
+                        res.end();
                     } else {
                         res.writeHead(500, { 'Content-Type': 'text/html; charset=utf-8' });
                         res.end(this.getErrorPage('Failed to complete registration'));
@@ -151,50 +223,6 @@ export class OAuthCallbackServer {
                 }
             });
         });
-    }
-
-    private async handleOAuthCallback(code: string, state?: string): Promise<boolean> {
-        try {
-            // If state is provided, use it to identify the specific user
-            if (state) {
-                console.log(chalk.cyan(`[OAuth] Processing registration for user: ${state}`));
-                const success = await this.userManager.completeRegistrationWithCode(state, code);
-                if (success) {
-                    console.log(chalk.green(`   ✓ Registration completed for ${state}`));
-                    return true;
-                } else {
-                    console.log(chalk.red(`   ✖ Registration failed for ${state}`));
-                    return false;
-                }
-            }
-
-            // Fallback: try all pending registrations (shouldn't happen with state parameter)
-            const pendingUsers = await this.userManager.getPendingRegistrations();
-
-            if (pendingUsers.length === 0) {
-                console.log(chalk.yellow('[OAuth] No pending registrations found'));
-                return false;
-            }
-
-            // Try to complete registration for each pending user
-            for (const phoneNumber of pendingUsers) {
-                try {
-                    const success = await this.userManager.completeRegistrationWithCode(phoneNumber, code);
-                    if (success) {
-                        console.log(chalk.green(`[OAuth] ✓ Registration completed for ${phoneNumber}`));
-                        return true;
-                    }
-                } catch (error: any) {
-                    console.log(chalk.yellow(`[OAuth] Failed to complete registration for ${phoneNumber}: ${error.message}`));
-                    continue;
-                }
-            }
-
-            return false;
-        } catch (error: any) {
-            console.error(chalk.red('[OAuth] Error in handleOAuthCallback:'), error);
-            return false;
-        }
     }
 
     private getSuccessPage(): string {

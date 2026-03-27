@@ -5,17 +5,19 @@
     "main": "dist/index.js",
     "scripts": {
         "build": "tsc",
-        "start": "node dist/index.js",
-        "dev": "tsx src/index.ts",
-        "dev:watch": "nodemon --exec tsx src/index.ts"
+        "start": "node --require ./dns-preload.js dist/index.js",
+        "dev": "node --require ./dns-preload.js --loader tsx src/index.ts",
+        "dev:watch": "nodemon --require ./dns-preload.js --exec 'node --loader tsx src/index.ts'"
     },
     "dependencies": {
         "@hapi/boom": "^10.0.1",
         "@types/qrcode": "^1.5.6",
         "@whiskeysockets/baileys": "^6.7.9",
+        "bcryptjs": "^3.0.3",
         "chalk": "^4.1.2",
         "dotenv": "^16.4.7",
         "googleapis": "^144.0.0",
+        "jsonwebtoken": "^9.0.3",
         "link-preview-js": "^3.2.0",
         "mongodb": "^7.1.0",
         "openai": "^6.18.0",
@@ -27,6 +29,8 @@
         "uuid": "^11.0.0"
     },
     "devDependencies": {
+        "@types/bcryptjs": "^2.4.6",
+        "@types/jsonwebtoken": "^9.0.10",
         "@types/node": "^22.10.0",
         "@types/uuid": "^10.0.0",
         "nodemon": "^3.1.9",

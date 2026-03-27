@@ -8,15 +8,18 @@ dotenv.config();
 const execAsync = promisify(exec);
 const MANUS_SCRIPT = path.resolve(__dirname, "../../skills/manus-computer/manus skill/manus/scripts/manus.py");
 
-async function runManusCommand(command: string, ...args: string[]): Promise<string> {
+async function runManusCommand(apiKey: string | undefined, command: string, ...args: string[]): Promise<string> {
   try {
     const safeArgs = args.map(arg => {
       if (arg === undefined || arg === null) return "";
       return `"${String(arg).replace(/"/g, '\\"')}"`;
     }).join(" ");
     
+    const env = { ...process.env };
+    if (apiKey) env.MANUS_API_KEY = apiKey;
+
     const { stdout, stderr } = await execAsync(`python "${MANUS_SCRIPT}" ${command} ${safeArgs}`, {
-      env: { ...process.env },
+      env
     });
     return stdout || stderr;
   } catch (error: any) {
@@ -126,7 +129,7 @@ export const manusTools = [
   }
 ];
 
-export async function handleManusToolCall(toolCall: any): Promise<string> {
+export async function handleManusToolCall(toolCall: any, apiKey?: string): Promise<string> {
   const { name, arguments: argsString } = toolCall.function;
   const args = JSON.parse(argsString);
 
@@ -135,37 +138,37 @@ export async function handleManusToolCall(toolCall: any): Promise<string> {
   switch (name) {
     // Cloud
     case "manus_send":
-      if (args.mode) return await runManusCommand("send", args.prompt, "--mode", args.mode);
-      return await runManusCommand("send", args.prompt);
+      if (args.mode) return await runManusCommand(apiKey, "send", args.prompt, "--mode", args.mode);
+      return await runManusCommand(apiKey, "send", args.prompt);
     case "manus_hybrid":
-      return await runManusCommand("hybrid", args.prompt);
+      return await runManusCommand(apiKey, "hybrid", args.prompt);
 
     // Tasks & Projects
     case "manus_tasks":
-      if (args.limit) return await runManusCommand("tasks", "--limit", args.limit.toString());
-      return await runManusCommand("tasks");
+      if (args.limit) return await runManusCommand(apiKey, "tasks", "--limit", args.limit.toString());
+      return await runManusCommand(apiKey, "tasks");
     case "manus_get_task":
-      return await runManusCommand("task", args.task_id);
+      return await runManusCommand(apiKey, "task", args.task_id);
     case "manus_projects":
-      return await runManusCommand("projects");
+      return await runManusCommand(apiKey, "projects");
 
     // Local execution
     case "manus_exec":
-      return await runManusCommand("exec", args.command);
+      return await runManusCommand(apiKey, "exec", args.command);
     case "manus_file_list":
-      if (args.dir_path) return await runManusCommand("file-list", args.dir_path);
-      return await runManusCommand("file-list");
+      if (args.dir_path) return await runManusCommand(apiKey, "file-list", args.dir_path);
+      return await runManusCommand(apiKey, "file-list");
     case "manus_file_read":
-      return await runManusCommand("file-read", args.file_path);
+      return await runManusCommand(apiKey, "file-read", args.file_path);
 
     // Desktop
     case "manus_desktop_screenshot":
       // Send directly back since it outputs path or success
-      return await runManusCommand("desktop-screenshot");
+      return await runManusCommand(apiKey, "desktop-screenshot");
     case "manus_desktop_apps":
-      return await runManusCommand("desktop-apps");
+      return await runManusCommand(apiKey, "desktop-apps");
     case "manus_desktop_sysinfo":
-      return await runManusCommand("desktop-sysinfo");
+      return await runManusCommand(apiKey, "desktop-sysinfo");
 
     default:
       return "Unknown Manus command.";
