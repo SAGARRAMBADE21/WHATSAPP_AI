@@ -9,6 +9,8 @@ import { createDriveTools } from '../tools/drive';
 import { createSheetsTools } from '../tools/sheets';
 import { createDocsTools } from '../tools/docs';
 import { createClassroomTools } from '../tools/classroom';
+import { manusTools, handleManusToolCall } from '../tools/manus';
+import { v0Tools, handleV0ToolCall } from '../tools/v0';
 
 export class AgentCore {
     private nlp: NLPEngine;
@@ -28,15 +30,17 @@ export class AgentCore {
      * Get or create tool registry for a specific user with their authenticated Google client
      */
     private async getUserToolRegistry(phoneNumber: string): Promise<ToolRegistry | null> {
-        // Check if we already have tools loaded for this user
-        if (this.userToolRegistries.has(phoneNumber)) {
-            return this.userToolRegistries.get(phoneNumber)!;
-        }
-
         // Get user's authenticated Google client
         const authClient = await this.userManager.getUserAuthClient(phoneNumber);
         if (!authClient) {
+            // Auth failed — clear any stale cached tool registry for this user
+            this.userToolRegistries.delete(phoneNumber);
             return null;
+        }
+
+        // Check if we already have tools loaded for this user
+        if (this.userToolRegistries.has(phoneNumber)) {
+            return this.userToolRegistries.get(phoneNumber)!;
         }
 
         // Create new tool registry for this user
@@ -50,9 +54,35 @@ export class AgentCore {
         const docsTools = createDocsTools(authClient);
         const classroomTools = createClassroomTools(authClient);
 
+        // Register Google Workspace Tools
         [...gmailTools, ...calendarTools, ...driveTools, ...sheetsTools, ...docsTools, ...classroomTools].forEach((tool) =>
             userTools.register(tool)
         );
+
+        // Register Global API Tools (Manus & V0)
+        manusTools.forEach(def => {
+            userTools.register({
+                name: def.function.name,
+                description: def.function.description,
+                parameters: def.function.parameters,
+                execute: async (args: any, context: ExecutionContext) => {
+                    const result = await handleManusToolCall({ function: { name: def.function.name, arguments: JSON.stringify(args) } });
+                    return { success: true, message: result };
+                }
+            });
+        });
+
+        v0Tools.forEach(def => {
+            userTools.register({
+                name: def.function.name,
+                description: def.function.description,
+                parameters: def.function.parameters,
+                execute: async (args: any, context: ExecutionContext) => {
+                    const result = await handleV0ToolCall({ function: { name: def.function.name, arguments: JSON.stringify(args) } });
+                    return { success: true, message: result };
+                }
+            });
+        });
 
         // Cache for future use
         this.userToolRegistries.set(phoneNumber, userTools);
@@ -74,7 +104,9 @@ export class AgentCore {
         // Get user-specific tool registry
         const userTools = await this.getUserToolRegistry(phoneNumber);
         if (!userTools) {
-            return '❌ Failed to load your workspace tools. Please try /logout and re-register.';
+            return '🔒 Your Google connection has expired and needs to be renewed.\n\n' +
+                '📝 Send /register to reconnect your Google Workspace.\n' +
+                '⏱️ This takes less than 30 seconds!';
         }
 
         // Ensure user profile exists
