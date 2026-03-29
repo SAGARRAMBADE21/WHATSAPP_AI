@@ -15,6 +15,7 @@ import { NLPEngine } from '../nlp/engine';
 import { ToolRegistry } from '../tools/registry';
 import { MemoryManager } from '../memory/manager';
 import { UserManager } from '../auth/user-manager';
+import { E2BSandboxManager } from '../sandbox/e2b-manager';
 
 interface SessionInfo {
     sessionId: string;
@@ -40,6 +41,7 @@ export class SessionManager {
     private userManager: UserManager;
     private nlpEngine: NLPEngine;
     private memoryManager: MemoryManager;
+    private sandboxManager: E2BSandboxManager;
     private sessionCollection;
     private decryptErrorCounts: Map<string, number> = new Map();
     private static readonly MAX_DECRYPT_ERRORS = 5;
@@ -49,13 +51,15 @@ export class SessionManager {
         io: SocketIOServer,
         userManager: UserManager,
         nlpEngine: NLPEngine,
-        memoryManager: MemoryManager
+        memoryManager: MemoryManager,
+        sandboxManager: E2BSandboxManager
     ) {
         this.db = db;
         this.io = io;
         this.userManager = userManager;
         this.nlpEngine = nlpEngine;
         this.memoryManager = memoryManager;
+        this.sandboxManager = sandboxManager;
         this.sessionCollection = db.collection<SessionDoc>('sessions');
 
         this.setupSocketHandlers();
@@ -307,10 +311,19 @@ export class SessionManager {
             const isSelfChat = senderJid.endsWith('@lid');
             const isCommand = text.startsWith('/');
 
-            // Process: self-chat messages, fromMe, commands, or messages from others
+            // Skip non-command messages from other people (privacy)
             if (!msg.key.fromMe && !isSelfChat && !isCommand) {
-                // Skip non-command messages from other people (privacy)
                 return;
+            }
+
+            // Skip messages the user sends TO OTHER CONTACTS.
+            // Only process fromMe messages that are in a self-chat (user messaging themselves).
+            // This prevents the bot from replying inside the user's chats with friends/family.
+            if (msg.key.fromMe && !isSelfChat) {
+                const recipientNumber = senderJid.split('@')[0].split(':')[0];
+                if (userNumber && recipientNumber !== userNumber) {
+                    return;
+                }
             }
 
             console.log(chalk.blue(`[Session ${sessionId}] ${msg.key.fromMe ? 'Self' : 'Incoming'}: "${text.substring(0, 50)}"`));
@@ -355,9 +368,7 @@ export class SessionManager {
             // Process with AI agent
             try {
                 const toolRegistry = new ToolRegistry();
-                // AgentCore.handleMessage() internally loads user-specific tools
-                // via getUserToolRegistry() with proper OAuth2Client authentication
-                const agent = new AgentCore(this.nlpEngine, toolRegistry, this.memoryManager, this.userManager);
+                const agent = new AgentCore(this.nlpEngine, toolRegistry, this.memoryManager, this.userManager, this.sandboxManager);
                 const incomingMessage = {
                     senderId: userNumber,
                     senderName: userNumber,
@@ -367,7 +378,24 @@ export class SessionManager {
                     isGroup: senderJid.includes('@g.us'),
                 };
                 console.log(chalk.cyan(`[Session ${sessionId}] Processing with AI agent...`));
-                const response = await agent.handleMessage(incomingMessage, userNumber);
+
+                // Keep typing indicator alive every 8s while agent processes
+                let typingAlive = true;
+                const typingInterval = setInterval(async () => {
+                    if (!typingAlive) return;
+                    try { await sock.sendPresenceUpdate('composing', replyJid); } catch { /* ignore */ }
+                }, 8000);
+
+                let response: string;
+                try {
+                    await sock.sendPresenceUpdate('composing', replyJid);
+                    response = await agent.handleMessage(incomingMessage, userNumber);
+                } finally {
+                    typingAlive = false;
+                    clearInterval(typingInterval);
+                    try { await sock.sendPresenceUpdate('paused', replyJid); } catch { /* ignore */ }
+                }
+
                 console.log(chalk.green(`[Session ${sessionId}] Agent responded, sending to ${replyJid}`));
                 await sock.sendMessage(replyJid, { text: response });
                 console.log(chalk.green(`[Session ${sessionId}] Response sent!`));

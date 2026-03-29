@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(powershell -Command \"Get-Content ''c:\\\\Users\\\\SAGAR\\\\Downloads\\\\whatsapp_slack\\\\data\\\\tokens\\\\token_917620970621.json''\")"
+    ]
+  }
+}

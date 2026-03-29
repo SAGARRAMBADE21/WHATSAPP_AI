@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sandbox — Workspace Navigator</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: #000;
+  color: #fff;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── Topbar ── */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  background: rgba(0,0,0,0.9);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  flex-shrink: 0; z-index: 50;
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand-icon {
+  width: 28px; height: 28px; border-radius: 7px;
+  background: #FF6A2F; display: flex; align-items: center;
+  justify-content: center; font-weight: 900; font-size: 10px; letter-spacing: -0.5px;
+}
+.brand-name { font-weight: 700; font-size: 14px; }
+.brand-name span { color: #FF6A2F; }
+.topbar-gap { flex: 1; }
+.status-pill {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 12px; border-radius: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.03);
+  font-size: 12px; color: #888;
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: #444; flex-shrink: 0; }
+.status-dot.green { background: #25D366; box-shadow: 0 0 6px rgba(37,211,102,0.5); animation: pulse 2s infinite; }
+.status-dot.yellow { background: #ffaa00; box-shadow: 0 0 6px rgba(255,170,0,0.4); animation: pulse 1.5s infinite; }
+.status-dot.red { background: #ef4444; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+.top-btn {
+  padding: 5px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.1); background: transparent;
+  color: #888; cursor: pointer; transition: all 0.2s; font-family: 'Inter', sans-serif;
+}
+.top-btn:hover { color: #fff; border-color: rgba(255,255,255,0.25); }
+.top-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.top-btn.orange { background: rgba(255,106,47,0.15); border-color: rgba(255,106,47,0.3); color: #FF6A2F; }
+.top-btn.orange:hover:not(:disabled) { background: rgba(255,106,47,0.25); }
+.top-btn.red { background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.2); color: #ef4444; }
+.top-btn.red:hover { background: rgba(239,68,68,0.2); }
+.back-link {
+  padding: 5px 14px; border-radius: 7px; border: 1px solid rgba(255,255,255,0.1);
+  color: #666; font-size: 12px; text-decoration: none; transition: all 0.2s;
+}
+.back-link:hover { color: #fff; border-color: rgba(255,255,255,0.25); }
+
+/* ── Main layout ── */
+.main { display: flex; flex: 1; overflow: hidden; }
+
+/* ── IDE panel ── */
+.ide-panel {
+  flex: 1; position: relative; display: flex; flex-direction: column;
+  border-right: 1px solid rgba(255,255,255,0.06); min-width: 0;
+}
+
+.ide-toolbar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 14px;
+  background: rgba(255,255,255,0.015);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  flex-shrink: 0;
+}
+.ide-toolbar-label { font-size: 11px; color: #555; font-weight: 500; white-space: nowrap; }
+.project-input {
+  padding: 5px 10px; border-radius: 6px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+  color: #ccc; font-size: 12px; width: 160px; outline: none;
+  font-family: 'Inter', sans-serif; transition: border-color 0.15s;
+}
+.project-input:focus { border-color: rgba(255,106,47,0.5); }
+.toolbar-btn {
+  padding: 5px 11px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.08); background: transparent;
+  color: #666; cursor: pointer; transition: all 0.15s; font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+}
+.toolbar-btn:hover { color: #fff; border-color: rgba(255,255,255,0.2); }
+.toolbar-btn.primary { background: rgba(255,106,47,0.12); border-color: rgba(255,106,47,0.25); color: #FF6A2F; }
+.toolbar-btn.primary:hover { background: rgba(255,106,47,0.22); }
+/* Terminal toggle button — active state */
+.toolbar-btn.term-active {
+  background: rgba(255,106,47,0.1); border-color: rgba(255,106,47,0.3);
+  color: #FF6A2F;
+}
+.toolbar-spacer { flex: 1; }
+.sandbox-id-chip {
+  font-size: 10px; color: #333; font-family: monospace;
+  padding: 3px 7px; background: rgba(255,255,255,0.02); border-radius: 4px;
+}
+
+/* ── IDE frame area (wraps iframe + terminal drawer) ── */
+#ide-frame-container {
+  flex: 1; position: relative; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+#ide-frame {
+  flex: 1; border: none; display: none;
+  background: #1e1e1e; min-height: 0;
+}
+
+/* ── IDE Placeholder ── */
+.ide-placeholder {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 20px; padding: 32px; pointer-events: auto;
+}
+.placeholder-icon-ring {
+  width: 72px; height: 72px; border-radius: 18px;
+  background: rgba(255,106,47,0.07); border: 1px solid rgba(255,106,47,0.18);
+  display: flex; align-items: center; justify-content: center;
+}
+.placeholder-icon-ring svg { width: 34px; height: 34px; opacity: 0.7; }
+.placeholder-title { font-size: 18px; color: #444; font-weight: 700; }
+.placeholder-sub { font-size: 13px; color: #2a2a2a; text-align: center; max-width: 320px; line-height: 1.7; }
+
+.ide-loading { display: none; flex-direction: column; align-items: center; gap: 18px; width: 100%; max-width: 340px; }
+.ide-loading.show { display: flex; }
+
+/* ── Progress block ── */
+.progress-block { width: 100%; display: flex; flex-direction: column; gap: 8px; }
+.progress-header { display: flex; align-items: baseline; justify-content: space-between; }
+.progress-label { font-size: 12px; color: #555; font-weight: 500; }
+.progress-pct { font-size: 18px; font-weight: 800; color: #FF6A2F; font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.5px; }
+.progress-bar-wrap { width: 100%; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden; }
+.progress-bar-fill {
+  height: 100%; background: #FF6A2F; border-radius: 2px; width: 0%;
+  transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 0 8px rgba(255,106,47,0.4);
+}
+.progress-bar-fill.indeterminate {
+  width: 60% !important;
+  animation: indeterminate 1.8s ease-in-out infinite;
+  transition: none;
+}
+@keyframes indeterminate {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(200%); }
+}
+
+/* ── Phase steps ── */
+.install-steps { width: 100%; display: flex; flex-direction: column; gap: 5px; }
+.install-step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px 10px; border-radius: 7px;
+  font-size: 12px; color: #333; transition: all 0.3s;
+}
+.install-step.active { color: #aaa; background: rgba(255,255,255,0.03); }
+.install-step.done  { color: #22c55e; }
+.step-icon {
+  width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid #2a2a2a; display: flex; align-items: center; justify-content: center;
+  font-size: 9px; transition: all 0.3s;
+}
+.install-step.active .step-icon {
+  border-color: #FF6A2F;
+  background: rgba(255,106,47,0.1);
+  animation: step-pulse 1.2s ease-in-out infinite;
+}
+.install-step.done .step-icon {
+  border-color: #22c55e; background: rgba(34,197,94,0.12); color: #22c55e;
+}
+@keyframes step-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,106,47,0.3)} 50%{box-shadow:0 0 0 4px rgba(255,106,47,0)} }
+.step-dot { width: 4px; height: 4px; border-radius: 50%; background: currentColor; }
+.start-sandbox-btn {
+  padding: 11px 28px; border-radius: 9px;
+  background: #FF6A2F; color: #fff; border: none;
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: all 0.2s; font-family: 'Inter', sans-serif;
+}
+.start-sandbox-btn:hover { background: #E5551A; transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,106,47,0.25); }
+.start-sandbox-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+.specs-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.spec-chip {
+  padding: 4px 10px; border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.02);
+  font-size: 11px; color: #3a3a3a;
+}
+
+/* ── Terminal drawer (slides up from bottom of ide-panel) ── */
+.term-drawer {
+  height: 0;
+  overflow: hidden;
+  display: flex; flex-direction: column;
+  background: #0d0d0d;
+  border-top: 1px solid transparent;
+  transition: height 0.22s cubic-bezier(0.4,0,0.2,1),
+              border-color 0.22s;
+  flex-shrink: 0;
+}
+.term-drawer.open {
+  height: 280px;
+  border-color: rgba(255,255,255,0.07);
+}
+
+/* Drag handle */
+.term-drag-handle {
+  height: 5px; cursor: ns-resize; flex-shrink: 0;
+  background: rgba(255,255,255,0.015);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  position: relative; display: flex; align-items: center; justify-content: center;
+}
+.term-drag-handle::after {
+  content: '';
+  width: 32px; height: 2px; border-radius: 1px;
+  background: rgba(255,255,255,0.1);
+  transition: background 0.15s, width 0.15s;
+}
+.term-drag-handle:hover::after { background: rgba(255,106,47,0.55); width: 44px; }
+
+/* Tab bar — VS Code style */
+.term-tabbar {
+  display: flex; align-items: stretch;
+  background: #0a0a0a;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  flex-shrink: 0; height: 32px;
+}
+.term-tab {
+  display: flex; align-items: center; gap: 7px;
+  padding: 0 14px;
+  font-size: 11px; font-weight: 600; color: #888;
+  letter-spacing: 0.4px; text-transform: uppercase;
+  border-right: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 2px solid transparent;
+  cursor: default; user-select: none;
+  transition: color 0.15s;
+}
+.term-tab.active {
+  color: #e0e0e0;
+  border-bottom-color: #FF6A2F;
+  background: rgba(255,255,255,0.025);
+}
+.term-tab-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #22c55e; display: none; flex-shrink: 0;
+  box-shadow: 0 0 5px rgba(34,197,94,0.5);
+}
+.term-tab-dot.show { display: block; }
+.term-tabbar-gap { flex: 1; }
+.term-tabbar-actions {
+  display: flex; align-items: center; gap: 2px; padding: 0 8px;
+}
+.term-icon-btn {
+  width: 24px; height: 24px; border-radius: 4px;
+  border: none; background: transparent; cursor: pointer;
+  color: #3a3a3a; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.term-icon-btn:hover { background: rgba(255,255,255,0.07); color: #bbb; }
+.term-icon-btn svg { pointer-events: none; }
+
+/* Output area */
+.term-output {
+  flex: 1; overflow-y: auto; padding: 6px 0 4px;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Courier New', monospace;
+  font-size: 12.5px; line-height: 1.65;
+  scroll-behavior: smooth;
+}
+.term-output::-webkit-scrollbar { width: 5px; }
+.term-output::-webkit-scrollbar-track { background: transparent; }
+.term-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+.term-output::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+.tl {
+  padding: 0 16px;
+  word-break: break-all; white-space: pre-wrap;
+  line-height: 1.65;
+}
+.tl + .tl.cmd { margin-top: 6px; }
+.tl.cmd { color: #ccc; }
+.tl.cmd .prompt-user { color: #22c55e; font-weight: 700; }
+.tl.cmd .prompt-at { color: #555; }
+.tl.cmd .prompt-dir { color: #60a5fa; }
+.tl.cmd .prompt-dollar { color: #FF6A2F; font-weight: 700; margin-right: 6px; }
+.tl.out { color: #a0a0a0; }
+.tl.err { color: #f87171; }
+.tl.info { color: #2e2e2e; font-style: italic; }
+.tl.ok  { color: #22c55e; }
+
+/* Input row */
+.term-input-row {
+  display: flex; align-items: center;
+  padding: 5px 16px 7px;
+  border-top: 1px solid rgba(255,255,255,0.04);
+  gap: 0;
+  flex-shrink: 0; background: #0d0d0d;
+}
+.term-prompt-inline {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 12.5px; white-space: nowrap; flex-shrink: 0;
+  display: flex; align-items: center; gap: 2px; margin-right: 7px;
+}
+.term-prompt-user { color: #22c55e; font-weight: 700; }
+.term-prompt-at { color: #3a3a3a; }
+.term-prompt-dir { color: #60a5fa; }
+.term-prompt-dollar { color: #FF6A2F; font-weight: 700; }
+.term-cmd-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: #e8e8e8;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 12.5px; caret-color: #FF6A2F;
+}
+.term-cmd-input::placeholder { color: #2a2a2a; }
+
+/* ── Right panel ── */
+.right-panel {
+  width: 280px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  background: #000; border-left: 1px solid rgba(255,255,255,0.06);
+}
+.files-toolbar {
+  padding: 8px 12px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
+.path-label {
+  flex: 1; font-size: 11px; font-family: monospace; color: #444;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-list { flex: 1; overflow-y: auto; padding: 6px 8px; }
+.file-list::-webkit-scrollbar { width: 4px; }
+.file-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.06); border-radius: 2px; }
+.file-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 12px; color: #666; transition: all 0.12s;
+}
+.file-item:hover { background: rgba(255,255,255,0.04); color: #ccc; }
+.file-icon { font-size: 12px; flex-shrink: 0; opacity: 0.8; }
+.file-size { margin-left: auto; font-size: 10px; color: #333; font-family: monospace; }
+.empty-panel {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  color: #272727; font-size: 13px; text-align: center; line-height: 1.7; padding: 24px;
+}
+
+/* ── Loading overlay ── */
+.overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+  display: none; align-items: center; justify-content: center;
+  z-index: 100; backdrop-filter: blur(6px);
+}
+.overlay.show { display: flex; }
+.overlay-box {
+  background: #0a0a0a; border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 16px; padding: 28px 36px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 12px; min-width: 260px;
+}
+.overlay-box h3 { font-size: 15px; font-weight: 600; color: #e0e0e0; }
+.overlay-box p { font-size: 12px; color: #555; line-height: 1.5; }
+.spin {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.08); border-top-color: #FF6A2F;
+  animation: spin 0.65s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 20px; left: 50%;
+  transform: translateX(-50%) translateY(70px);
+  background: #22c55e; color: #fff;
+  padding: 9px 20px; border-radius: 22px;
+  font-size: 12px; font-weight: 600;
+  transition: transform 0.3s cubic-bezier(0.175,0.885,0.32,1.275);
+  z-index: 200; pointer-events: none;
+}
+#toast.show { transform: translateX(-50%) translateY(0); }
+#toast.error { background: #ef4444; }
+</style>
+</head>
+<body>
+
+<!-- Topbar -->
+<div class="topbar">
+  <div class="brand">
+    <div class="brand-icon">WN</div>
+    <span class="brand-name">Workspace <span>Sandbox</span></span>
+  </div>
+  <div class="topbar-gap"></div>
+  <div class="status-pill">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Not started</span>
+  </div>
+  <button class="top-btn orange" id="start-btn" onclick="startSandbox()">Start Sandbox</button>
+  <button class="top-btn red" id="kill-btn" onclick="killSandbox()" style="display:none">Kill</button>
+  <a class="back-link" href="/dashboard.html">&#8592; Dashboard</a>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- IDE Panel -->
+  <div class="ide-panel">
+    <div class="ide-toolbar">
+      <span class="ide-toolbar-label">Project:</span>
+      <input class="project-input" id="project-input" placeholder="my-project">
+      <input class="project-input" id="repo-input" placeholder="https://github.com/user/repo" style="width:220px">
+      <button class="toolbar-btn primary" onclick="openProject()">Open</button>
+      <div class="toolbar-spacer"></div>
+      <span class="sandbox-id-chip" id="sandbox-id-label"></span>
+      <!-- Terminal toggle -->
+      <button class="toolbar-btn" id="term-toggle-btn" onclick="toggleTerminal()" title="Toggle Terminal (Ctrl+`)">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" style="vertical-align:-1px;margin-right:4px">
+          <path d="M1.5 2A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2zm1.646 3.146a.5.5 0 0 1 .708.708L2.707 7l1.147 1.146a.5.5 0 0 1-.708.708l-1.5-1.5a.5.5 0 0 1 0-.708l1.5-1.5zm3 0a.5.5 0 0 1 .708 0l1.5 1.5a.5.5 0 0 1 0 .708l-1.5 1.5a.5.5 0 0 1-.708-.708L7.293 7 6.146 5.854a.5.5 0 0 1 0-.708zM8.5 9.5a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1H9a.5.5 0 0 1-.5-.5z"/>
+        </svg>Terminal
+      </button>
+    </div>
+
+    <div id="ide-frame-container">
+      <iframe id="ide-frame" allow="clipboard-read; clipboard-write"
+        sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
+
+      <!-- Placeholder -->
+      <div class="ide-placeholder" id="ide-placeholder">
+        <div class="placeholder-icon-ring">
+          <svg viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M74.9 7.4L49.2 31.7 28.3 16.2 17 20.9v58.2l11.3 4.7 20.9-15.5 25.7 24.3L83 87.5V12.5z" stroke="#FF6A2F" stroke-width="5" stroke-linejoin="round" fill="none"/>
+            <path d="M28.3 62.5V37.5l20.9 12.5z" fill="#FF6A2F" opacity="0.35"/>
+          </svg>
+        </div>
+        <h3 class="placeholder-title" id="placeholder-title">Sandbox not started</h3>
+        <p class="placeholder-sub" id="placeholder-sub">Start the sandbox to launch a full Linux environment with VS Code and an integrated terminal.</p>
+        <div class="ide-loading" id="ide-loading">
+          <!-- Progress bar + % -->
+          <div class="progress-block">
+            <div class="progress-header">
+              <span class="progress-label" id="loading-step-text">Initialising…</span>
+              <span class="progress-pct" id="progress-pct">0%</span>
+            </div>
+            <div class="progress-bar-wrap">
+              <div class="progress-bar-fill" id="progress-bar"></div>
+            </div>
+          </div>
+          <!-- Phase steps -->
+          <div class="install-steps">
+            <div class="install-step" id="step-0">
+              <div class="step-icon"><div class="step-dot"></div></div>
+              <span>Booting Linux VM</span>
+            </div>
+            <div class="install-step" id="step-1">
+              <div class="step-icon"><div class="step-dot"></div></div>
+              <span>Downloading VS Code server</span>
+            </div>
+            <div class="install-step" id="step-2">
+              <div class="step-icon"><div class="step-dot"></div></div>
+              <span>Extracting &amp; configuring</span>
+            </div>
+            <div class="install-step" id="step-3">
+              <div class="step-icon"><div class="step-dot"></div></div>
+              <span>Starting VS Code server</span>
+            </div>
+          </div>
+        </div>
+        <button class="start-sandbox-btn" id="placeholder-btn" onclick="startSandbox()">Start Sandbox</button>
+        <div class="specs-row" id="specs-row">
+          <div class="spec-chip">Ubuntu 22.04</div>
+          <div class="spec-chip">2 vCPU</div>
+          <div class="spec-chip">512 MB RAM</div>
+          <div class="spec-chip">VS Code</div>
+        </div>
+      </div>
+
+      <!-- ── Terminal drawer (slides up from bottom) ── -->
+      <div class="term-drawer" id="term-drawer">
+        <!-- Drag handle to resize -->
+        <div class="term-drag-handle" id="term-drag-handle"></div>
+
+        <!-- Tab bar — VS Code style -->
+        <div class="term-tabbar">
+          <div class="term-tab active">
+            <div class="term-tab-dot" id="term-active-dot"></div>
+            Terminal
+          </div>
+          <div class="term-tabbar-gap"></div>
+          <div class="term-tabbar-actions">
+            <!-- Clear -->
+            <button class="term-icon-btn" onclick="clearTerminal()" title="Clear terminal">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+            <!-- Minimize / close -->
+            <button class="term-icon-btn" onclick="closeTerminal()" title="Close terminal (Ctrl+`)">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                <path d="M5 12h14"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Output -->
+        <div class="term-output" id="term-output">
+          <div class="tl info">Ready — type a command below and press Enter</div>
+        </div>
+
+        <!-- Input -->
+        <div class="term-input-row">
+          <span class="term-prompt-inline">
+            <span class="term-prompt-user">user</span><span class="term-prompt-at">@</span><span class="term-prompt-dir" id="term-cwd">~</span>&nbsp;<span class="term-prompt-dollar">$</span>
+          </span>
+          <input class="term-cmd-input" id="term-cmd-input"
+            placeholder="enter command…"
+            onkeydown="onTermKey(event)"
+            autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right panel — Files -->
+  <div class="right-panel">
+    <div class="files-toolbar">
+      <span class="path-label" id="current-path">/home/user</span>
+      <button class="toolbar-btn" onclick="refreshFiles(currentPath)" style="padding:3px 8px;font-size:10px">Refresh</button>
+    </div>
+    <div class="file-list" id="file-list">
+      <div class="empty-panel">Start the sandbox to browse files.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="overlay" id="overlay">
+  <div class="overlay-box">
+    <div class="spin"></div>
+    <h3 id="overlay-title">Starting Sandbox</h3>
+    <p id="overlay-msg">Spinning up your cloud VM…</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Auth ──────────────────────────────────────────────────────────────────────
+const token = new URLSearchParams(location.search).get('token') || localStorage.getItem('navigator_token');
+if (!token) location.href = '/dashboard.html';
+if (token) localStorage.setItem('navigator_token', token);
+const H = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let sandboxRunning = false;
+let sandboxId = null;
+let currentPath = '/home/user';
+let idePollingTimer = null;
+let ideReady = false;
+let termOpen = false;
+let termHeight = 280; // current drawer height in px
+let cmdHistory = [];
+let histIdx = -1;
+let fileWatchTimer = null;
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const res = await fetch('/api/sandbox/status', { headers: H });
+    if (res.status === 401) { location.href = '/dashboard.html'; return; }
+    const info = await res.json();
+    if (info && info.status === 'running') {
+      sandboxId = info.sandboxId;
+      sandboxRunning = true;
+      setSandboxActive(sandboxId);
+      await refreshFiles();
+      startFileWatch();
+      if (info.ideReady && info.ideUrl) loadIDE(info.ideUrl);
+      else { showIDELoading(); startIDEPolling(); }
+    }
+  } catch (e) { console.error(e); }
+}
+init();
+
+// ── Start sandbox ─────────────────────────────────────────────────────────────
+async function startSandbox() {
+  document.getElementById('start-btn').disabled = true;
+  document.getElementById('placeholder-btn').disabled = true;
+  showOverlay('Starting Sandbox', 'Spinning up your Linux VM…');
+  try {
+    const res = await fetch('/api/sandbox/start', { method: 'POST', headers: H });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.error || 'Failed to start');
+    sandboxId = data.sandboxId;
+    sandboxRunning = true;
+    setSandboxActive(sandboxId);
+    hideOverlay();
+    toast(data.isNew ? 'Sandbox created!' : 'Reconnected!');
+    await refreshFiles();
+    startFileWatch();
+    showIDELoading();
+    startIDEPolling();
+  } catch (e) {
+    hideOverlay();
+    document.getElementById('start-btn').disabled = false;
+    document.getElementById('placeholder-btn').disabled = false;
+    toast('Failed: ' + e.message, true);
+  }
+}
+
+// ── IDE polling ───────────────────────────────────────────────────────────────
+// Install timeline (seconds elapsed → phase):
+//   0–8s   : step 0 — VM boot / already-running check
+//   8–50s  : step 1 — downloading code-server (~150 MB)
+//   50–65s : step 2 — extracting + start command
+//   65–90s : step 3 — readiness retry loop
+// MAX = 140 polls × 3s = 7 min safety cap
+
+// phase → { stepIdx that should be active, label }
+const PHASE_MAP = {
+  idle:        { step: -1, label: 'Waiting…' },
+  checking:    { step:  0, label: 'Checking sandbox…' },
+  downloading: { step:  1, label: 'Downloading VS Code server…' },
+  extracting:  { step:  2, label: 'Extracting & configuring…' },
+  starting:    { step:  3, label: 'Starting VS Code server…' },
+  ready:       { step:  4, label: 'VS Code ready!' },
+  error:       { step: -1, label: 'Install failed' },
+};
+
+const CHECK_SVG = '<svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,6 5,9 10,3"/></svg>';
+const DOT_HTML  = '<div class="step-dot"></div>';
+
+function applyInstallState(phase, pct, errMsg) {
+  const info = PHASE_MAP[phase] || PHASE_MAP.idle;
+  const activeStep = info.step;
+
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('step-' + i);
+    if (!el) continue;
+    el.classList.remove('active', 'done');
+    if (i < activeStep) {
+      el.classList.add('done');
+      el.querySelector('.step-icon').innerHTML = CHECK_SVG;
+    } else if (i === activeStep) {
+      el.classList.add('active');
+      el.querySelector('.step-icon').innerHTML = DOT_HTML;
+    } else {
+      el.querySelector('.step-icon').innerHTML = DOT_HTML;
+    }
+  }
+
+  const bar = document.getElementById('progress-bar');
+  bar.classList.remove('indeterminate');
+  bar.style.width = pct + '%';
+  document.getElementById('progress-pct').textContent = pct + '%';
+  document.getElementById('loading-step-text').textContent = errMsg || info.label;
+}
+
+function markIDEReady() {
+  applyInstallState('ready', 100, null);
+  // tick all steps done
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('step-' + i);
+    if (!el) continue;
+    el.classList.remove('active'); el.classList.add('done');
+    el.querySelector('.step-icon').innerHTML = CHECK_SVG;
+  }
+}
+
+function startIDEPolling() {
+  if (idePollingTimer) clearTimeout(idePollingTimer);
+  let attempts = 0;
+  const MAX = 140; // 7 min hard cap
+
+  // Reset all steps to pending
+  for (let i = 0; i < 4; i++) {
+    const el = document.getElementById('step-' + i);
+    if (el) { el.classList.remove('active','done'); el.querySelector('.step-icon').innerHTML = DOT_HTML; }
+  }
+  applyInstallState('checking', 5, null);
+
+  async function poll() {
+    attempts++;
+    try {
+      const res = await fetch('/api/sandbox/ide-url', { headers: H });
+      const data = await res.json();
+
+      if (data.ideReady && data.ideUrl) {
+        clearTimeout(idePollingTimer); idePollingTimer = null;
+        markIDEReady();
+        setTimeout(() => loadIDE(data.ideUrl), 350);
+        return;
+      }
+
+      // 'idle' means backend not yet set phase — treat as 'checking' step 0
+      const phase = (!data.installPhase || data.installPhase === 'idle') ? 'checking' : data.installPhase;
+      const pct   = (phase === 'checking' && !data.installPct) ? 5 : (data.installPct ?? 0);
+      applyInstallState(phase, pct, null);
+
+      // Surface install errors immediately
+      if (data.installPhase === 'error') {
+        clearTimeout(idePollingTimer); idePollingTimer = null;
+        const errText = data.installError || 'VS Code install failed';
+        document.getElementById('loading-step-text').textContent = errText;
+        document.getElementById('progress-pct').textContent = '✗';
+        document.getElementById('progress-bar').style.width = '0%';
+        showRetryButton();
+        return;
+      }
+    } catch {}
+
+    if (attempts >= MAX) {
+      clearTimeout(idePollingTimer); idePollingTimer = null;
+      document.getElementById('loading-step-text').textContent = 'Taking longer than expected…';
+      document.getElementById('progress-bar').classList.add('indeterminate');
+      document.getElementById('progress-pct').textContent = '—';
+      showRetryButton();
+      return;
+    }
+
+    // Poll fast (1s) for first 10 attempts while checking/starting,
+    // then slow down to 3s once download is in progress
+    const phase = document.getElementById('loading-step-text').textContent;
+    const interval = attempts <= 10 ? 1000 : 3000;
+    idePollingTimer = setTimeout(poll, interval);
+  }
+
+  // Start first poll after 1s
+  idePollingTimer = setTimeout(poll, 1000);
+}
+
+function showRetryButton() {
+  // Remove any existing retry btn first
+  const old = document.getElementById('ide-retry-btn');
+  if (old) old.remove();
+  const btn = document.createElement('button');
+  btn.id = 'ide-retry-btn';
+  btn.className = 'start-sandbox-btn';
+  btn.style.cssText = 'margin-top:4px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);font-size:12px;padding:8px 22px;color:#aaa';
+  btn.textContent = 'Retry';
+  btn.onclick = () => { btn.remove(); startIDEPolling(); };
+  document.getElementById('ide-loading').appendChild(btn);
+}
+
+function showIDELoading() {
+  document.getElementById('ide-placeholder').style.display = 'flex';
+  document.getElementById('ide-frame').style.display = 'none';
+  document.getElementById('placeholder-btn').style.display = 'none';
+  document.getElementById('specs-row').style.display = 'none';
+  document.getElementById('placeholder-title').textContent = 'Setting up VS Code';
+  document.getElementById('placeholder-sub').textContent = 'Your cloud Linux environment is being configured.';
+  document.getElementById('ide-loading').classList.add('show');
+  setStatus('yellow', 'Installing VS Code…');
+}
+
+function loadIDE(url) {
+  ideReady = true;
+  const iframe = document.getElementById('ide-frame');
+  iframe.src = url;
+  iframe.style.display = 'block';
+  document.getElementById('ide-placeholder').style.display = 'none';
+  setStatus('green', 'VS Code ready');
+  toast('VS Code ready!');
+}
+
+// ── Kill sandbox ──────────────────────────────────────────────────────────────
+async function killSandbox() {
+  if (!confirm('Kill sandbox? All running processes and files will be lost.')) return;
+  if (idePollingTimer) { clearTimeout(idePollingTimer); idePollingTimer = null; }
+  stopFileWatch();
+  await fetch('/api/sandbox/kill', { method: 'POST', headers: H });
+  sandboxRunning = false; sandboxId = null; ideReady = false;
+  setStatus('none', 'Not started');
+  document.getElementById('start-btn').style.display = '';
+  document.getElementById('start-btn').disabled = false;
+  document.getElementById('kill-btn').style.display = 'none';
+  document.getElementById('sandbox-id-label').textContent = '';
+  const iframe = document.getElementById('ide-frame');
+  iframe.src = 'about:blank'; iframe.style.display = 'none';
+  const ph = document.getElementById('ide-placeholder');
+  ph.style.display = 'flex';
+  document.getElementById('placeholder-btn').style.display = '';
+  document.getElementById('placeholder-btn').disabled = false;
+  document.getElementById('specs-row').style.display = '';
+  document.getElementById('ide-loading').classList.remove('show');
+  document.getElementById('placeholder-title').textContent = 'Sandbox not started';
+  document.getElementById('placeholder-sub').textContent = 'Start the sandbox to launch a full Linux environment with VS Code and an integrated terminal.';
+  document.getElementById('file-list').innerHTML = '<div class="empty-panel">Start the sandbox to browse files.</div>';
+  // Close terminal if open
+  if (termOpen) closeTerminal();
+  toast('Sandbox stopped.');
+}
+
+// ── Terminal toggle ───────────────────────────────────────────────────────────
+function toggleTerminal() {
+  if (termOpen) closeTerminal();
+  else openTerminal();
+}
+
+function openTerminal() {
+  if (!sandboxRunning) { toast('Start the sandbox first.', true); return; }
+  termOpen = true;
+  const drawer = document.getElementById('term-drawer');
+  drawer.classList.add('open');
+  drawer.style.height = termHeight + 'px';
+  document.getElementById('term-toggle-btn').classList.add('term-active');
+  document.getElementById('term-active-dot').classList.add('show');
+  // Focus input
+  setTimeout(() => document.getElementById('term-cmd-input').focus(), 260);
+}
+
+function closeTerminal() {
+  termOpen = false;
+  const drawer = document.getElementById('term-drawer');
+  drawer.classList.remove('open');
+  drawer.style.height = '0';
+  document.getElementById('term-toggle-btn').classList.remove('term-active');
+  document.getElementById('term-active-dot').classList.remove('show');
+}
+
+// ── Drag to resize terminal ───────────────────────────────────────────────────
+(function setupDrag() {
+  const handle = document.getElementById('term-drag-handle');
+  const drawer = document.getElementById('term-drawer');
+  let dragging = false, startY = 0, startH = 0;
+
+  handle.addEventListener('mousedown', e => {
+    if (!termOpen) return;
+    dragging = true; startY = e.clientY; startH = drawer.offsetHeight;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ns-resize';
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const delta = startY - e.clientY; // drag up = increase
+    const newH = Math.max(100, Math.min(600, startH + delta));
+    termHeight = newH;
+    drawer.style.height = newH + 'px';
+  });
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  });
+})();
+
+// Ctrl+` to toggle terminal (like VS Code)
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === '`') { e.preventDefault(); toggleTerminal(); }
+});
+
+// ── Run command ───────────────────────────────────────────────────────────────
+async function runCommand() {
+  if (!sandboxRunning) { toast('Start the sandbox first.', true); return; }
+  const input = document.getElementById('term-cmd-input');
+  const cmd = input.value.trim();
+  if (!cmd) return;
+  input.value = '';
+  cmdHistory.unshift(cmd);
+  if (cmdHistory.length > 100) cmdHistory.pop();
+  histIdx = -1;
+
+  termLogCmd(cmd);
+  try {
+    const res = await fetch('/api/sandbox/command', {
+      method: 'POST', headers: H,
+      body: JSON.stringify({ command: cmd })
+    });
+    const data = await res.json();
+    if (data.stdout) data.stdout.split('\n').filter(l => l.trim()).forEach(l => termLog('out', l));
+    if (data.stderr) data.stderr.split('\n').filter(l => l.trim()).forEach(l => termLog('err', l));
+    if (!data.stdout && !data.stderr && data.exitCode === 0) termLog('ok', '✓');
+    else if (!data.stdout && !data.stderr) termLog('info', `exited ${data.exitCode}`);
+    if (cmd.startsWith('cd ')) {
+      currentPath = cmd.slice(3).trim() || '/home/user';
+      updateTermCwd(currentPath);
+      refreshFiles(currentPath);
+    }
+  } catch (e) {
+    termLog('err', '✗ ' + e.message);
+  }
+}
+
+function onTermKey(e) {
+  if (e.key === 'Enter') { runCommand(); }
+  else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (histIdx < cmdHistory.length - 1) { histIdx++; document.getElementById('term-cmd-input').value = cmdHistory[histIdx]; }
+  }
+  else if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (histIdx > 0) { histIdx--; document.getElementById('term-cmd-input').value = cmdHistory[histIdx]; }
+    else { histIdx = -1; document.getElementById('term-cmd-input').value = ''; }
+  }
+}
+
+function termLog(type, text) {
+  const out = document.getElementById('term-output');
+  const d = document.createElement('div');
+  d.className = 'tl ' + type;
+  d.textContent = text;
+  out.appendChild(d);
+  out.scrollTop = out.scrollHeight;
+}
+
+function termLogCmd(cmd) {
+  const out = document.getElementById('term-output');
+  const cwd = document.getElementById('term-cwd').textContent;
+  const d = document.createElement('div');
+  d.className = 'tl cmd';
+  d.innerHTML =
+    `<span class="prompt-user">user</span>` +
+    `<span class="prompt-at">@</span>` +
+    `<span class="prompt-dir">${esc(cwd)}</span>` +
+    `<span class="prompt-dollar"> $</span> ` +
+    esc(cmd);
+  out.appendChild(d);
+  out.scrollTop = out.scrollHeight;
+}
+
+function updateTermCwd(path) {
+  const short = path.replace('/home/user', '~');
+  document.getElementById('term-cwd').textContent = short;
+}
+
+function clearTerminal() {
+  document.getElementById('term-output').innerHTML =
+    '<div class="tl info">Terminal cleared</div>';
+}
+
+// ── Open project ──────────────────────────────────────────────────────────────
+async function openProject() {
+  if (!sandboxRunning) { toast('Start the sandbox first.', true); return; }
+  const name = document.getElementById('project-input').value.trim() || 'my-project';
+  const repo = document.getElementById('repo-input').value.trim() || undefined;
+  showOverlay('Opening Project', `Setting up "${name}"…`);
+  try {
+    const res = await fetch('/api/sandbox/project/open', {
+      method: 'POST', headers: H,
+      body: JSON.stringify({ project_name: name, repo_url: repo })
+    });
+    const data = await res.json();
+    if (data.path) {
+      currentPath = data.path;
+      document.getElementById('current-path').textContent = currentPath;
+      await refreshFiles(currentPath);
+    }
+    hideOverlay();
+    toast(`"${name}" ready!`);
+  } catch (e) {
+    hideOverlay();
+    toast('Failed: ' + e.message, true);
+  }
+}
+
+// ── Real-time file watcher ────────────────────────────────────────────────────
+function startFileWatch() {
+  stopFileWatch();
+  fileWatchTimer = setInterval(() => {
+    if (sandboxRunning) refreshFiles(currentPath);
+  }, 3000);
+}
+
+function stopFileWatch() {
+  if (fileWatchTimer) { clearInterval(fileWatchTimer); fileWatchTimer = null; }
+}
+
+// ── Files ─────────────────────────────────────────────────────────────────────
+async function refreshFiles(path) {
+  if (!sandboxRunning) return;
+  if (!path) path = currentPath;
+  currentPath = path;
+  document.getElementById('current-path').textContent = path;
+  try {
+    const res = await fetch('/api/sandbox/command', {
+      method: 'POST', headers: H,
+      body: JSON.stringify({ command: `ls -lah ${path} 2>/dev/null` })
+    });
+    const data = await res.json();
+    const lines = (data.stdout || '').split('\n').filter(l => l && !l.startsWith('total') && l.trim());
+    const container = document.getElementById('file-list');
+    if (!lines.length) { container.innerHTML = '<div class="empty-panel">Empty directory</div>'; return; }
+    container.innerHTML = lines.map(l => {
+      const parts = l.trim().split(/\s+/);
+      const name = parts.slice(8).join(' ') || parts[parts.length - 1];
+      if (!name || name === '.' || name === '..') return '';
+      const isDir = l.startsWith('d');
+      const size = parts[4] || '';
+      const icon = isDir ? '&#128193;' : getFileIcon(name);
+      return `<div class="file-item" onclick="${isDir ? `refreshFiles('${path}/${name}')` : ''}">
+        <span class="file-icon">${icon}</span>
+        <span>${esc(name)}</span>
+        <span class="file-size">${isDir ? '' : size}</span>
+      </div>`;
+    }).filter(Boolean).join('');
+  } catch {}
+}
+
+function getFileIcon(name) {
+  const ext = name.split('.').pop()?.toLowerCase();
+  const m = { js:'&#128196;',ts:'&#128196;',py:'&#128196;',go:'&#128196;',
+    json:'&#123;',md:'&#128209;',txt:'&#128209;',sh:'&#9881;',
+    html:'&#127760;',css:'&#127800;',png:'&#128444;',jpg:'&#128444;',svg:'&#128444;' };
+  return m[ext] || '&#128196;';
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function setSandboxActive(id) {
+  setStatus('green', `Running · ${id.slice(0,8)}…`);
+  document.getElementById('start-btn').style.display = 'none';
+  document.getElementById('kill-btn').style.display = '';
+  document.getElementById('sandbox-id-label').textContent = id.slice(0,12) + '…';
+}
+
+function setStatus(state, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'status-dot' +
+    (state === 'green' ? ' green' : state === 'yellow' ? ' yellow' : state === 'red' ? ' red' : '');
+  document.getElementById('status-text').textContent = text;
+}
+
+function showOverlay(title, msg) {
+  document.getElementById('overlay-title').textContent = title;
+  document.getElementById('overlay-msg').textContent = msg;
+  document.getElementById('overlay').classList.add('show');
+}
+function hideOverlay() { document.getElementById('overlay').classList.remove('show'); }
+
+function toast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = isError ? 'error' : '';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

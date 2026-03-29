@@ -5,6 +5,7 @@ import fs from 'fs';
 import { Server as SocketIOServer } from 'socket.io';
 import { UserManager } from './user-manager';
 import { MemOSStore } from '../memory/memos-store';
+import { E2BSandboxManager } from '../sandbox/e2b-manager';
 import chalk from 'chalk';
 import jwt from 'jsonwebtoken';
 
@@ -32,12 +33,14 @@ export class OAuthCallbackServer {
     private io: SocketIOServer | null = null;
     private userManager: UserManager;
     private memosStore: MemOSStore | null = null;
+    private sandboxManager: E2BSandboxManager | null = null;
     private port: number = 3000;
 
-    constructor(userManager: UserManager, port?: number, memosStore?: MemOSStore) {
+    constructor(userManager: UserManager, port?: number, memosStore?: MemOSStore, sandboxManager?: E2BSandboxManager) {
         this.userManager = userManager;
         if (port) this.port = port;
         if (memosStore) this.memosStore = memosStore;
+        if (sandboxManager) this.sandboxManager = sandboxManager;
     }
 
     async start(): Promise<void> {
@@ -179,6 +182,87 @@ export class OAuthCallbackServer {
                                 const deleted = await memos.delete(email, memoryId);
                                 res.writeHead(deleted ? 200 : 404);
                                 return res.end(JSON.stringify({ success: deleted }));
+                            }
+                        }
+
+                        // ── Sandbox API ───────────────────────────────────────────────
+                        if (this.sandboxManager) {
+                            const sbx = this.sandboxManager;
+
+                            // POST /api/sandbox/start — get or create sandbox
+                            if (req.method === 'POST' && url.pathname === '/api/sandbox/start') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const { sandboxId, isNew } = await sbx.getOrCreate(email);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify({ success: true, sandboxId, isNew }));
+                            }
+
+                            // GET /api/sandbox/status
+                            if (req.method === 'GET' && url.pathname === '/api/sandbox/status') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const info = await sbx.getSandboxInfo(email);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify(info || { status: 'none' }));
+                            }
+
+                            // POST /api/sandbox/command
+                            if (req.method === 'POST' && url.pathname === '/api/sandbox/command') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const body = await parseBody();
+                                const result = await sbx.runCommand(email, body.command);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify(result));
+                            }
+
+                            // POST /api/sandbox/file/write
+                            if (req.method === 'POST' && url.pathname === '/api/sandbox/file/write') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const body = await parseBody();
+                                await sbx.writeFile(email, body.path, body.content);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify({ success: true }));
+                            }
+
+                            // POST /api/sandbox/file/read
+                            if (req.method === 'POST' && url.pathname === '/api/sandbox/file/read') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const body = await parseBody();
+                                const content = await sbx.readFile(email, body.path);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify({ content }));
+                            }
+
+                            // POST /api/sandbox/project/open
+                            if (req.method === 'POST' && url.pathname === '/api/sandbox/project/open') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const body = await parseBody();
+                                const path = await sbx.openProject(email, body.project_name, body.repo_url);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify({ success: true, path }));
+                            }
+
+                            // GET /api/sandbox/ide-url
+                            if (req.method === 'GET' && url.pathname === '/api/sandbox/ide-url') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const result = await sbx.getIDEUrl(email);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify(result));
+                            }
+
+                            // POST /api/sandbox/kill
+                            if (req.method === 'POST' && url.pathname === '/api/sandbox/kill') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                await sbx.kill(email);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify({ success: true }));
                             }
                         }
 

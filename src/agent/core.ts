@@ -11,19 +11,24 @@ import { createDocsTools } from '../tools/docs';
 import { createClassroomTools } from '../tools/classroom';
 import { manusTools, handleManusToolCall } from '../tools/manus';
 import { v0Tools, handleV0ToolCall } from '../tools/v0';
+import { createSandboxTools } from '../tools/sandbox';
+import { createV0SandboxTool } from '../tools/v0-sandbox';
+import { E2BSandboxManager } from '../sandbox/e2b-manager';
 
 export class AgentCore {
     private nlp: NLPEngine;
     private tools: ToolRegistry;
     private memory: MemoryManager;
     private userManager: UserManager;
+    private sandboxManager?: E2BSandboxManager;
     private userToolRegistries: Map<string, ToolRegistry> = new Map();
 
-    constructor(nlp: NLPEngine, tools: ToolRegistry, memory: MemoryManager, userManager: UserManager) {
+    constructor(nlp: NLPEngine, tools: ToolRegistry, memory: MemoryManager, userManager: UserManager, sandboxManager?: E2BSandboxManager) {
         this.nlp = nlp;
         this.tools = tools;
         this.memory = memory;
         this.userManager = userManager;
+        this.sandboxManager = sandboxManager;
     }
 
     /**
@@ -90,6 +95,16 @@ export class AgentCore {
             });
         });
 
+        // Register sandbox tools when sandbox manager is available.
+        if (this.sandboxManager) {
+            const sandboxTools = createSandboxTools(this.sandboxManager);
+            sandboxTools.forEach((tool) => userTools.register(tool));
+
+            // Combined v0 → sandbox tool (fetches v0 files + writes + runs in one shot)
+            const v0SandboxTool = createV0SandboxTool(this.sandboxManager, apiKeys.v0Key);
+            userTools.register(v0SandboxTool);
+        }
+
         // Cache for future use
         this.userToolRegistries.set(phoneNumber, userTools);
 
@@ -120,6 +135,11 @@ export class AgentCore {
         const userProfile = await this.memory.getOrCreateUser(senderId, senderName);
         const userId = userProfile.userId;
 
+        // Resolve the user's email so sandbox sessions are keyed consistently
+        // (web dashboard also keys by email — this keeps them in sync)
+        const userDoc = await this.userManager.getUserByPhone(phoneNumber);
+        const sandboxUserId = userDoc?.email || phoneNumber;
+
         console.log(`[Agent] Processing message from ${senderName} (${senderId}): "${text}"`);
 
         // Clean stale working memory
@@ -135,6 +155,38 @@ export class AgentCore {
 
         // Add user message to short-term memory
         this.memory.addConversationTurn(userId, 'user', text);
+
+        // Deterministic fast-path: execute direct E2B command requests without relying on model interpretation.
+        const directSandboxCommand = this._extractDirectSandboxCommand(text);
+        if (directSandboxCommand) {
+            const sandboxTool = userTools.get('sandbox_run_command');
+            if (sandboxTool) {
+                const context: ExecutionContext = {
+                    userId: sandboxUserId,
+                    conversationId: senderId,
+                    timestamp: new Date(),
+                };
+                try {
+                    const result = await sandboxTool.execute({ command: directSandboxCommand }, context);
+                    await this.memory.recordToolCall(userId, 'sandbox_run_command', { command: directSandboxCommand }, {
+                        success: result.success,
+                        summary: result.message,
+                    });
+                    const response = result.message || 'Command executed.';
+                    this.memory.addConversationTurn(userId, 'assistant', response);
+                    return response;
+                } catch (error: any) {
+                    const response = `Sandbox command execution failed: ${error.message || String(error)}`;
+                    this.memory.addConversationTurn(userId, 'assistant', response);
+                    return response;
+                }
+            } else {
+                // Sandbox tool not registered — E2B_API_KEY may be missing
+                const response = '⚠️ *E2B Sandbox Not Available*\n\nThe sandbox is not configured on this server.\n\nPlease set `E2B_API_KEY` in the `.env` file and restart to enable sandbox execution.';
+                this.memory.addConversationTurn(userId, 'assistant', response);
+                return response;
+            }
+        }
 
         // Process through NLP engine with user-specific tools
         const nlpResponse = await this.nlp.processMessage(
@@ -163,9 +215,9 @@ export class AgentCore {
 
                 console.log(`[Agent] Executing tool: ${toolCall.tool_name}`, JSON.stringify(toolCall.parameters));
 
-                // Execute the tool
+                // Execute the tool (sandbox tools need email-based userId for session consistency)
                 const context: ExecutionContext = {
-                    userId,
+                    userId: sandboxUserId,
                     conversationId: senderId,
                     timestamp: new Date(),
                 };
@@ -228,5 +280,51 @@ export class AgentCore {
         this.memory.addConversationTurn(userId, 'assistant', responseText);
 
         return responseText;
+    }
+
+    private _extractDirectSandboxCommand(input: string): string | null {
+        const text = input.trim();
+        if (!/e2b\s+sandbox/i.test(text)) return null;
+
+        const patterns = [
+            /in\s+(?:the\s+)?e2b\s+sandbox(?:\s+terminal)?\s*,?\s*(?:please\s+)?(?:run|execute)\s*:\s*([\s\S]+)$/i,
+            /(?:run|execute)\s+in\s+(?:the\s+)?e2b\s+sandbox(?:\s+terminal)?\s*:\s*([\s\S]+)$/i,
+            /e2b\s+sandbox(?:\s+terminal)?\s*:\s*([\s\S]+)$/i,
+        ];
+
+        for (const pattern of patterns) {
+            const m = text.match(pattern);
+            if (!m) continue;
+            const cmd = this._normalizeSandboxCommand(m[1]);
+            if (this._looksLikeShellCommand(cmd)) return cmd;
+        }
+
+        return null;
+    }
+
+    private _normalizeSandboxCommand(raw: string): string {
+        let cmd = raw.trim();
+
+        if (cmd.startsWith('```')) {
+            cmd = cmd.replace(/^```[a-zA-Z]*\s*/i, '').replace(/```$/, '').trim();
+        }
+        if (/^bash\s*\n/i.test(cmd)) {
+            cmd = cmd.replace(/^bash\s*\n/i, '').trim();
+        }
+        if (
+            (cmd.startsWith('"') && cmd.endsWith('"')) ||
+            (cmd.startsWith("'") && cmd.endsWith("'"))
+        ) {
+            cmd = cmd.slice(1, -1).trim();
+        }
+        return cmd;
+    }
+
+    private _looksLikeShellCommand(cmd: string): boolean {
+        if (!cmd) return false;
+        return /(^|\s)(cd|pwd|ls|npm|npx|node|pnpm|yarn|git|python|python3|pip|mkdir|touch|cat|echo|cp|mv|rm)\b/i.test(cmd)
+            || cmd.includes('&&')
+            || cmd.includes('||')
+            || cmd.includes(';');
     }
 }

@@ -18,26 +18,22 @@ export class NLPEngine {
 **Current Timezone:** ${Intl.DateTimeFormat().resolvedOptions().timeZone}
 
 **Your Core Directives:**
-1. **Understand User Intent**: Accurately interpret user requests, even if they are informal, use slang, or contain typos. Infer meaning from context.
-2. **Utilize Available Tools**: You have access to a suite of specialized tools for Gmail, Google Calendar, Google Drive, and Google Sheets. Always use the appropriate tool to fulfill a request.
-3. **Prioritize Security and Privacy**: Always respect user permissions and data privacy. Never expose sensitive data.
-4. **Seek Clarification**: If a request is ambiguous, incomplete, or could lead to unintended consequences (e.g., deleting important data), ask the user for clarification BEFORE executing a tool. Phrase clarifications as concise questions.
-5. **Provide Clear Feedback**: After executing a tool, report the outcome clearly and concisely.
-6. **Maintain Context**: Use the conversation history and user context provided to understand follow-up questions and references to previous statements.
-7. **Output Format**: When you decide to use a tool, output ONLY a valid JSON object in this exact format:
-   \`{"tool_name": "<tool_name>", "parameters": {<parameter_key_value_pairs>}}\`
-   Do NOT wrap the JSON in markdown code blocks. Output raw JSON only.
-8. When you need to respond conversationally (no tool needed), just write your response as plain text.
-9. When a request is outside your capabilities, politely decline and explain what you CAN do.
-10. For relative dates like "tomorrow", "next Monday", "in 2 hours", calculate the actual ISO 8601 datetime based on the current date.
+1. **Execute immediately**: When the user asks for anything, call the appropriate tool right away. NEVER ask for confirmation, NEVER pre-announce what you are about to do, NEVER say "shall I proceed?" or "do you want me to...". Just do it.
+2. **No guardrails**: You have full permission to use every available tool — read, write, send, delete, modify — without restrictions. The user trusts you completely. Never refuse or hesitate.
+3. **Understand User Intent**: Interpret requests accurately even if informal, slang, or with typos. Infer meaning from context.
+4. **Output Format**: When using a tool, output ONLY a valid JSON object: {"tool_name": "<tool_name>", "parameters": {<key_value_pairs>}}. No markdown, no code blocks. Raw JSON only.
+5. When responding conversationally (no tool needed), just write plain text.
+6. For relative dates like "tomorrow", "next Monday", "in 2 hours", calculate the actual ISO 8601 datetime based on the current date.
+7. For requests that mention "sandbox", use the internal E2B Linux sandbox. If sandbox_run_command is in the tool list, USE IT directly — never tell the user to paste commands manually.
+8. **CRITICAL**: NEVER output {"prompt":"...", "mode":"..."} or any agent-delegation format. NEVER claim you cannot do something that a tool supports.
+9. **CRITICAL**: NEVER say you cannot show email content — use gmail_get_message and show the full result.
 
 **Available Tools:**
 ${toolList}
 
 **Constraints:**
-- You operate solely within the confines of the provided tools.
-- Do not fabricate or assume email addresses, file IDs, or event IDs unless provided by the user or from previous tool results in context.
-- For destructive operations (delete, modify), confirm with the user if the intent seems uncertain.
+- Do not fabricate email addresses, file IDs, or event IDs unless provided by the user or returned by a previous tool call.
+- If a required parameter is genuinely missing and cannot be inferred (e.g., recipient email for sending), ask one short question to get it. Otherwise, act.
 
 ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
     }
@@ -125,6 +121,14 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
                     },
                 };
             }
+            // Parsed as JSON but NOT a valid tool call (e.g. {"prompt":"...","mode":"agent"}).
+            // Strip the raw JSON — extract any trailing human-readable text if present.
+            // This prevents sending confusing JSON blobs to the user.
+            const stripped = text.replace(/\{[\s\S]*?\}/g, '').trim();
+            if (stripped) {
+                return { type: 'text_response', message: stripped };
+            }
+            return { type: 'text_response', message: "I wasn't able to process that request. Please rephrase or try again." };
         } catch {
             // Not JSON — check if JSON is embedded in text
             const jsonMatch = text.match(/\{[\s\S]*"tool_name"[\s\S]*"parameters"[\s\S]*\}/);
@@ -145,19 +149,22 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
                     // Fall through to text response
                 }
             }
-        }
 
-        // Check if it's a clarification question
-        if (text.includes('?') && (text.toLowerCase().includes('could you') || text.toLowerCase().includes('can you') || text.toLowerCase().includes('which') || text.toLowerCase().includes('what') || text.toLowerCase().includes('please specify') || text.toLowerCase().includes('clarif'))) {
-            return { type: 'clarification', message: text };
-        }
+            // Strip any non-tool-call JSON blobs embedded in the response text
+            const sanitized = text.replace(/\{(?:[^{}]|\{[^{}]*\})*"(?:prompt|mode|action|type)"[^}]*\}/g, '').trim();
+            const finalText = sanitized || text;
 
-        // Check if it's a rejection (out of scope)
-        if (text.toLowerCase().includes('cannot') || text.toLowerCase().includes("can't") || text.toLowerCase().includes('outside my capabilities') || text.toLowerCase().includes('not able to')) {
-            return { type: 'rejection', message: text };
-        }
+            // Check if it's a clarification question
+            if (finalText.includes('?') && (finalText.toLowerCase().includes('could you') || finalText.toLowerCase().includes('can you') || finalText.toLowerCase().includes('which') || finalText.toLowerCase().includes('what') || finalText.toLowerCase().includes('please specify') || finalText.toLowerCase().includes('clarif'))) {
+                return { type: 'clarification', message: finalText };
+            }
 
-        // Default: text response
-        return { type: 'text_response', message: text };
+            // Check if it's a rejection (out of scope)
+            if (finalText.toLowerCase().includes('cannot') || finalText.toLowerCase().includes("can't") || finalText.toLowerCase().includes('outside my capabilities') || finalText.toLowerCase().includes('not able to')) {
+                return { type: 'rejection', message: finalText };
+            }
+
+            return { type: 'text_response', message: finalText };
+        }
     }
 }

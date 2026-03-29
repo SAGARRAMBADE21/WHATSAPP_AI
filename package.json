@@ -10,6 +10,7 @@
         "dev:watch": "nodemon --require ./dns-preload.js --exec 'node --loader tsx src/index.ts'"
     },
     "dependencies": {
+        "@e2b/code-interpreter": "^2.4.0",
         "@hapi/boom": "^10.0.1",
         "@types/qrcode": "^1.5.6",
         "@whiskeysockets/baileys": "^6.7.9",

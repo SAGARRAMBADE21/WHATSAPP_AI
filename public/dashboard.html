@@ -43,6 +43,12 @@
             font-weight: 700; font-size: 12px; color: #fff;
         }
         .user-email { font-size: 13px; color: #aaa; }
+        .sandbox-btn {
+            background: rgba(255,106,47,0.1); border: 1px solid rgba(255,106,47,0.25);
+            color: #FF6A2F; padding: 6px 14px; border-radius: 8px;
+            cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s;
+        }
+        .sandbox-btn:hover { background: rgba(255,106,47,0.2); border-color: rgba(255,106,47,0.5); }
         .memory-graph-btn {
             background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);
             color: #10B981; padding: 6px 14px; border-radius: 8px;
@@ -180,6 +186,7 @@
                 <div class="user-avatar" id="user-avatar">?</div>
                 <span class="user-email" id="user-email-display">Loading...</span>
             </div>
+            <button class="sandbox-btn" id="sandbox-btn" onclick="openSandbox()">Sandbox</button>
             <button class="memory-graph-btn" id="memory-graph-btn" onclick="openMemoryGraph()">Memory Graph</button>
             <button class="logout-btn" id="logout-btn">Log Out</button>
         </div>
@@ -291,6 +298,10 @@
 
         let userEmail = '';
         let socket = null;
+
+        function openSandbox() {
+            window.location.href = '/sandbox.html?token=' + token;
+        }
 
         function openMemoryGraph() {
             window.location.href = '/memory-graph.html?token=' + token;

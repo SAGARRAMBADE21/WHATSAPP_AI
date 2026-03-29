@@ -8,6 +8,7 @@ import { OAuthCallbackServer } from './auth/oauth-server';
 import { NLPEngine } from './nlp/engine';
 import { ToolRegistry } from './tools/registry';
 import { MemoryManager } from './memory/manager';
+import { E2BSandboxManager } from './sandbox/e2b-manager';
 import { SessionManager } from './whatsapp/session-manager';
 import chalk from 'chalk';
 
@@ -77,6 +78,10 @@ async function main(): Promise<void> {
     await memoryManager.initialize(userManager.getDb());
     console.log(chalk.gray('   ▸ Memory Manager') + chalk.green(' ✓'));
 
+    const sandboxManager = new E2BSandboxManager(memoryManager.memosStore);
+    await sandboxManager.initialize(userManager.getDb());
+    console.log(chalk.gray('   ▸ Sandbox Manager') + chalk.green(' ✓'));
+
     console.log(chalk.gray('\n   Tool registry initialized (tools will be loaded per-user)'));
     console.log(chalk.green('   ✓ Components ready'));
 
@@ -85,7 +90,7 @@ async function main(): Promise<void> {
     console.log(chalk.bold('🔐 Starting Server + OAuth'));
     console.log(chalk.gray('   Setting up HTTP server, Socket.IO, and OAuth...\n'));
 
-    const oauthServer = new OAuthCallbackServer(userManager, undefined, memoryManager.memosStore);
+    const oauthServer = new OAuthCallbackServer(userManager, undefined, memoryManager.memosStore, sandboxManager);
     try {
         await oauthServer.start();
         console.log(chalk.green('   ✓ Server ready'));
@@ -108,7 +113,8 @@ async function main(): Promise<void> {
         io,
         userManager,
         nlpEngine,
-        memoryManager
+        memoryManager,
+        sandboxManager
     );
 
     // Restore previously connected sessions
@@ -130,6 +136,7 @@ async function main(): Promise<void> {
         console.log(chalk.yellow('\n\n━━━ SHUTTING DOWN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━'));
         console.log(chalk.gray('   Cleaning up resources...'));
         memoryManager.shutdown();
+        sandboxManager.shutdown();
         await userManager.shutdown();
         console.log(chalk.green('   ✓ Shutdown complete\n'));
         process.exit(0);
