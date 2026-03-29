@@ -2,17 +2,20 @@ import { Db } from 'mongodb';
 import { ShortTermMemory } from './short-term';
 import { WorkingMemory } from './working';
 import { LongTermMemory } from './long-term';
+import { MemOSStore } from './memos-store';
 import { ConversationTurn, UserProfile, MemoryEntry } from '../types';
 
 export class MemoryManager {
     public shortTerm: ShortTermMemory;
     public working: WorkingMemory;
     public longTerm: LongTermMemory;
+    public memosStore: MemOSStore;
 
     constructor() {
         this.shortTerm = new ShortTermMemory();
         this.working = new WorkingMemory();
         this.longTerm = new LongTermMemory();
+        this.memosStore = new MemOSStore();
     }
 
     /**
@@ -20,6 +23,7 @@ export class MemoryManager {
      */
     async initialize(db: Db): Promise<void> {
         await this.longTerm.initialize(db);
+        await this.memosStore.initialize(db);
     }
 
     async getOrCreateUser(phoneNumber: string, displayName?: string): Promise<UserProfile> {

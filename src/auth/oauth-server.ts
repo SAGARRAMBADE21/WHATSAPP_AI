@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { Server as SocketIOServer } from 'socket.io';
 import { UserManager } from './user-manager';
+import { MemOSStore } from '../memory/memos-store';
 import chalk from 'chalk';
 import jwt from 'jsonwebtoken';
 
@@ -30,11 +31,13 @@ export class OAuthCallbackServer {
     private server: http.Server | null = null;
     private io: SocketIOServer | null = null;
     private userManager: UserManager;
+    private memosStore: MemOSStore | null = null;
     private port: number = 3000;
 
-    constructor(userManager: UserManager, port?: number) {
+    constructor(userManager: UserManager, port?: number, memosStore?: MemOSStore) {
         this.userManager = userManager;
         if (port) this.port = port;
+        if (memosStore) this.memosStore = memosStore;
     }
 
     async start(): Promise<void> {
@@ -110,6 +113,73 @@ export class OAuthCallbackServer {
                             await this.userManager.saveApiKeys(email, manusUpdate, v0Update);
                             res.writeHead(200);
                             return res.end(JSON.stringify({ success: true }));
+                        }
+
+                        // ── MemOS Memory API ──────────────────────────────────────────
+                        if (this.memosStore) {
+                            const memos = this.memosStore;
+
+                            // GET /api/memory/graph
+                            if (req.method === 'GET' && url.pathname === '/api/memory/graph') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const graph = await memos.getGraphData(email);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify(graph));
+                            }
+
+                            // GET /api/memory/stats
+                            if (req.method === 'GET' && url.pathname === '/api/memory/stats') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const stats = await memos.stats(email);
+                                res.writeHead(200);
+                                return res.end(JSON.stringify(stats));
+                            }
+
+                            // GET /api/memory/entries
+                            if (req.method === 'GET' && url.pathname === '/api/memory/entries') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const tier = url.searchParams.get('tier') as any ?? undefined;
+                                const source_tool = url.searchParams.get('source_tool') as any ?? undefined;
+                                const limit = parseInt(url.searchParams.get('limit') ?? '50');
+                                const offset = parseInt(url.searchParams.get('offset') ?? '0');
+                                const result = await memos.list(email, { tier, source_tool, limit, offset });
+                                res.writeHead(200);
+                                return res.end(JSON.stringify(result));
+                            }
+
+                            // POST /api/memory/store
+                            if (req.method === 'POST' && url.pathname === '/api/memory/store') {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const body = await parseBody();
+                                const { tier, content, subject, workflow_name, source_tool, tags, importance, related_to, ttl_days } = body;
+                                let id: string;
+                                if (tier === 'episodic') {
+                                    id = await memos.storeEpisodic(email, content, source_tool ?? 'orchestrator', { tags, importance, related_to, ttl_days });
+                                } else if (tier === 'semantic') {
+                                    id = await memos.storeSemantic(email, content, subject ?? '', source_tool ?? 'orchestrator', { tags, importance, related_to });
+                                } else if (tier === 'procedural') {
+                                    id = await memos.storeProcedural(email, workflow_name ?? '', content, source_tool ?? 'orchestrator', { tags, importance, related_to });
+                                } else {
+                                    res.writeHead(400);
+                                    return res.end(JSON.stringify({ error: 'tier must be episodic, semantic, or procedural' }));
+                                }
+                                res.writeHead(201);
+                                return res.end(JSON.stringify({ success: true, id }));
+                            }
+
+                            // DELETE /api/memory/:id
+                            if (req.method === 'DELETE' && url.pathname.startsWith('/api/memory/')) {
+                                const email = getAuthenticatedUser();
+                                if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                                const memoryId = url.pathname.replace('/api/memory/', '');
+                                const deleted = await memos.delete(email, memoryId);
+                                res.writeHead(deleted ? 200 : 404);
+                                return res.end(JSON.stringify({ success: deleted }));
+                            }
                         }
 
                         res.writeHead(404);

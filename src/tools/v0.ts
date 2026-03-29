@@ -104,6 +104,22 @@ export const v0Tools = [
       parameters: { type: "object", properties: { chat_id: { type: "string" } }, required: ["chat_id"] }
     }
   },
+  {
+    type: "function",
+    function: {
+      name: "v0_delete_chat",
+      description: "Delete a v0 chat/thread permanently. Use this when the user wants to remove or delete a specific v0 chat.",
+      parameters: { type: "object", properties: { chat_id: { type: "string", description: "The ID of the v0 chat to delete" } }, required: ["chat_id"] }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "v0_list_chats",
+      description: "List all your v0 chats/threads with their IDs. Use this to find a chat ID before deleting.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
 
   // 3. Deployments
   {
@@ -167,6 +183,10 @@ export async function handleV0ToolCall(toolCall: any, apiKey?: string): Promise<
       return await runV0Command(apiKey, "send-message", args.chat_id, args.message);
     case "v0_get_files":
       return await runV0Command(apiKey, "get-files", args.chat_id);
+    case "v0_delete_chat":
+      return await runV0Command(apiKey, "delete-chat", args.chat_id, "--confirm");
+    case "v0_list_chats":
+      return await runV0Command(apiKey, "list-chats");
 
     case "v0_deploy":
       return await runV0Command(apiKey, "deploy", args.project_id, args.chat_id, args.version_id);

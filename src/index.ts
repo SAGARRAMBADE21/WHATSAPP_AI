@@ -85,7 +85,7 @@ async function main(): Promise<void> {
     console.log(chalk.bold('🔐 Starting Server + OAuth'));
     console.log(chalk.gray('   Setting up HTTP server, Socket.IO, and OAuth...\n'));
 
-    const oauthServer = new OAuthCallbackServer(userManager);
+    const oauthServer = new OAuthCallbackServer(userManager, undefined, memoryManager.memosStore);
     try {
         await oauthServer.start();
         console.log(chalk.green('   ✓ Server ready'));

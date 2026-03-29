@@ -6,7 +6,7 @@
     "scripts": {
         "build": "tsc",
         "start": "node --require ./dns-preload.js dist/index.js",
-        "dev": "node --require ./dns-preload.js --loader tsx src/index.ts",
+        "dev": "node --require ./dns-preload.js --import tsx src/index.ts",
         "dev:watch": "nodemon --require ./dns-preload.js --exec 'node --loader tsx src/index.ts'"
     },
     "dependencies": {

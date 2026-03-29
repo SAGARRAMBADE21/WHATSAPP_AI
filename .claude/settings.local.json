@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(npm start:*)",
+      "Bash(node -e \":*)",
+      "Bash(python \"skills/manus-computer/manus skill/manus/scripts/manus.py\" --help)",
+      "Bash(node skills/v0skill/scripts/v0_platform.mjs --version)",
+      "Bash(curl -s http://localhost:3000/index.html)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Bash(find /c/Users/SAGAR/Downloads/whatsapp_slack -not -path */node_modules/* -not -path */.git/* -not -path */dist/* -type f)"
+    ]
+  }
+}

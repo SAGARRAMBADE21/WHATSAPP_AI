@@ -91,6 +91,29 @@
         .qr-hint { font-size: 12px; color: #555; }
         .qr-status { font-size: 13px; color: #FF6A2F; font-weight: 600; margin-bottom: 10px; }
 
+        /* Session expiry banner */
+        .session-expired-banner {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(255, 75, 75, 0.08);
+            border: 1px solid rgba(255, 75, 75, 0.25);
+            border-radius: 10px; padding: 12px 16px; margin-bottom: 14px;
+            animation: fadeIn 0.4s ease;
+        }
+        .session-expired-banner .icon { font-size: 18px; flex-shrink: 0; }
+        .session-expired-banner .msg { font-size: 13px; }
+        .session-expired-banner .msg strong { color: #ff4b4b; display: block; font-size: 13px; margin-bottom: 2px; }
+        .session-expired-banner .msg span { color: #888; font-size: 12px; }
+
+        .reconnecting-banner {
+            display: flex; align-items: center; gap: 10px;
+            background: rgba(255,170,0,0.07);
+            border: 1px solid rgba(255,170,0,0.2);
+            border-radius: 10px; padding: 12px 16px; margin-bottom: 14px;
+            animation: fadeIn 0.4s ease;
+        }
+        .reconnecting-banner .icon { font-size: 18px; flex-shrink: 0; }
+        .reconnecting-banner .msg { font-size: 13px; color: #ffaa00; font-weight: 600; }
+
         .form-group { margin-bottom: 18px; }
         .form-group label { display: block; color: #888; font-size: 12px; font-weight: 600; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
         .form-group input {
@@ -178,6 +201,22 @@
 
         <div class="card">
             <h2>WhatsApp Link</h2>
+
+            <!-- Shown when session expires / logged out -->
+            <div id="wa-expired-banner" style="display:none;" class="session-expired-banner">
+                <span class="icon">🔴</span>
+                <div class="msg">
+                    <strong>Session Expired</strong>
+                    <span>Your WhatsApp session was disconnected. Please scan the new QR code below to reconnect.</span>
+                </div>
+            </div>
+
+            <!-- Shown while reconnecting -->
+            <div id="wa-reconnecting-banner" style="display:none;" class="reconnecting-banner">
+                <span class="icon">🔄</span>
+                <div class="msg">Reconnecting to WhatsApp…</div>
+            </div>
+
             <div id="wa-qr-section" style="display: none;">
                 <p>Scan with WhatsApp to link your number.</p>
                 <div class="qr-container">
@@ -186,7 +225,7 @@
                         <img id="qr-img" width="200" height="200" alt="QR" src="" style="display:none;">
                         <div id="qr-loading" style="width:200px;height:200px;display:flex;align-items:center;justify-content:center;color:#000;font-size:13px;">Loading QR...</div>
                     </div>
-                    <div class="qr-hint">WhatsApp > Linked Devices > Link a Device</div>
+                    <div class="qr-hint">WhatsApp &gt; Linked Devices &gt; Link a Device</div>
                 </div>
             </div>
             <div id="wa-connected-section" style="display: none;">
@@ -248,6 +287,7 @@
 
         document.getElementById('logout-btn').addEventListener('click', () => {
             localStorage.removeItem('navigator_token');
+            localStorage.removeItem('navigator_last_email');
             window.location.href = '/login.html';
         });
 
@@ -258,6 +298,7 @@
                 });
                 if (res.status === 401) {
                     localStorage.removeItem('navigator_token');
+                    localStorage.removeItem('navigator_last_email');
                     window.location.href = '/login.html';
                     return;
                 }
@@ -273,6 +314,8 @@
 
                     if (data.phoneNumber) {
                         showWhatsAppConnected(data.phoneNumber);
+                        // Still init socket so we catch future expiry events
+                        initSocket();
                     } else {
                         initWhatsAppQR();
                     }
@@ -284,6 +327,9 @@
         loadDashboard();
 
         function showWhatsAppConnected(phone) {
+            // Hide banners and QR, show connected section
+            document.getElementById('wa-expired-banner').style.display = 'none';
+            document.getElementById('wa-reconnecting-banner').style.display = 'none';
             document.getElementById('wa-qr-section').style.display = 'none';
             document.getElementById('wa-connected-section').style.display = 'block';
             document.getElementById('wa-phone-display').textContent = '+' + phone;
@@ -293,18 +339,48 @@
             addActivity('WhatsApp connected: +' + phone);
         }
 
-        function initWhatsAppQR() {
-            document.getElementById('wa-qr-section').style.display = 'block';
+        function showSessionExpired() {
+            document.getElementById('wa-reconnecting-banner').style.display = 'none';
+            document.getElementById('wa-expired-banner').style.display = 'flex';
             document.getElementById('wa-connected-section').style.display = 'none';
+            document.getElementById('wa-qr-section').style.display = 'block';
+            // Reset QR image so it shows loading state
+            const qrImg = document.getElementById('qr-img');
+            qrImg.style.display = 'none';
+            qrImg.src = '';
+            document.getElementById('qr-loading').style.display = 'flex';
+            document.getElementById('qr-status').textContent = 'Waiting for new QR code...';
+            document.getElementById('status-whatsapp').className = 'status-row disconnected';
+            document.getElementById('wa-status-dot').className = 'status-dot red';
+            document.getElementById('wa-status-text').textContent = 'Session expired';
+            addActivity('⚠️ WhatsApp session expired — rescan required');
+        }
+
+        function showReconnecting() {
+            document.getElementById('wa-expired-banner').style.display = 'none';
+            document.getElementById('wa-reconnecting-banner').style.display = 'flex';
+            document.getElementById('wa-connected-section').style.display = 'none';
+            document.getElementById('wa-qr-section').style.display = 'none';
+            document.getElementById('status-whatsapp').className = 'status-row pending';
+            document.getElementById('wa-status-dot').className = 'status-dot yellow';
+            document.getElementById('wa-status-text').textContent = 'Reconnecting';
+            addActivity('🔄 WhatsApp reconnecting...');
+        }
+
+        function initSocket() {
+            if (socket) return; // Already initialized
             socket = io();
 
             socket.on('connect', () => {
-                document.getElementById('qr-status').textContent = 'Requesting QR code...';
-                addActivity('Connected to server, requesting QR...');
+                addActivity('Connected to server');
                 socket.emit('create-session', { sessionId: userEmail });
             });
 
             socket.on('qr-code', (data) => {
+                // Show QR section (clears expired/reconnecting banners except expired)
+                document.getElementById('wa-reconnecting-banner').style.display = 'none';
+                document.getElementById('wa-connected-section').style.display = 'none';
+                document.getElementById('wa-qr-section').style.display = 'block';
                 document.getElementById('qr-status').textContent = 'Scan the QR code below';
                 const qrImg = document.getElementById('qr-img');
                 qrImg.src = data.qr;
@@ -319,21 +395,33 @@
             });
 
             socket.on('session-status', (data) => {
-                if (data.status === 'connected') showWhatsAppConnected(data.phoneNumber);
+                if (data.status === 'connected') {
+                    showWhatsAppConnected(data.phoneNumber);
+                } else if (data.status === 'logged_out') {
+                    showSessionExpired();
+                } else if (data.status === 'reconnecting') {
+                    showReconnecting();
+                }
             });
 
             socket.on('message-received', (data) => {
-                addActivity('Received: "' + (data.text || '').substring(0, 50) + '"');
+                addActivity('📩 Received: "' + (data.text || '').substring(0, 50) + '"');
             });
 
-            socket.on('message-sent', (data) => {
-                addActivity('Sent response to user');
+            socket.on('message-sent', () => {
+                addActivity('✅ Sent response to user');
             });
 
             socket.on('disconnect', () => {
-                document.getElementById('qr-status').textContent = 'Disconnected — reconnecting...';
-                addActivity('Socket disconnected');
+                addActivity('⚡ Socket disconnected — reconnecting...');
             });
+        }
+
+        // Keep initWhatsAppQR for explicit QR-only cases (no phone number)
+        function initWhatsAppQR() {
+            document.getElementById('wa-qr-section').style.display = 'block';
+            document.getElementById('wa-connected-section').style.display = 'none';
+            initSocket();
         }
 
         let activityStarted = false;

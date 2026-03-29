@@ -181,9 +181,13 @@
             window.location.href = '/dashboard.html';
         }
 
-        // Show recent session if user previously logged in
+        // Only show recent session if user has a valid token (not logged out)
         const lastEmail = localStorage.getItem('navigator_last_email');
-        if (lastEmail) {
+        const hasToken = localStorage.getItem('navigator_token');
+        if (lastEmail && !hasToken) {
+            // User logged out — clean up stored email
+            localStorage.removeItem('navigator_last_email');
+        } else if (lastEmail && hasToken) {
             const el = document.getElementById('recent-session');
             el.classList.add('visible');
             document.getElementById('recent-email').textContent = lastEmail;
