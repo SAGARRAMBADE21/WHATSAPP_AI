@@ -64,6 +64,11 @@ export class E2BSandboxManager {
                 return { sandboxId: existing.sandboxId, isNew: false, ideUrl: existing.ideUrl, ideReady: existing.ideReady };
             } catch {
                 console.log(chalk.yellow(`   ⚠ Sandbox expired for ${userEmail}, creating new`));
+                // Clear stale IDE URL so frontend doesn't load a dead sandbox
+                await this.col.updateOne({ userEmail }, {
+                    $set: { status: 'dead', ideReady: false },
+                    $unset: { ideUrl: '' }
+                });
             }
         }
 

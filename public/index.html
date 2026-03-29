@@ -330,6 +330,34 @@
             font-weight: 400;
         }
 
+        .hero-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 14px;
+            margin-bottom: 28px;
+        }
+
+        .hero-metric {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--card-border);
+            font-size: 0.78rem;
+            color: #cfcfcf;
+            letter-spacing: 0.4px;
+            text-transform: uppercase;
+        }
+
+        .hero-metric strong {
+            color: var(--white);
+            font-size: 0.84rem;
+            letter-spacing: 0;
+            text-transform: none;
+        }
+
         .hero-btns {
             display: flex;
             gap: 16px;
@@ -817,6 +845,15 @@
                 flex-direction: column;
             }
 
+            .hero-metrics {
+                gap: 10px;
+            }
+
+            .hero-metric {
+                width: 100%;
+                justify-content: center;
+            }
+
             .cmd {
                 flex-direction: column;
                 align-items: flex-start;
@@ -887,8 +924,14 @@
 
             <div style="padding: 0 4vw; margin-top: 48px; width: 100%;">
                 <p class="hero-sub reveal d3">
-                    Gmail, Calendar, Drive, Sheets, Docs — managed through WhatsApp. No apps. No complexity.
+                    Gmail, Calendar, Drive, Sheets, Docs - managed through WhatsApp. One chat to run your full workday.
                 </p>
+
+                <div class="hero-metrics reveal d3">
+                    <div class="hero-metric"><strong>60 sec</strong> average setup</div>
+                    <div class="hero-metric"><strong>6 tools</strong> in one assistant</div>
+                    <div class="hero-metric"><strong>24/7</strong> conversational workflow</div>
+                </div>
 
                 <div class="hero-btns reveal d4">
                     <a href="/register.html" class="btn-orange">
@@ -899,10 +942,10 @@
                             <rect x="3" y="14" width="7" height="7" rx="1" />
                             <rect x="14" y="14" width="7" height="7" rx="1" />
                         </svg>
-                        Scan QR Code
+                        Create Account
                     </a>
-                    <a href="#tools" class="btn-outline">
-                        See What It Can Do →
+                    <a href="/login.html" class="btn-outline">
+                        Sign In
                     </a>
                 </div>
             </div>
@@ -916,7 +959,7 @@
             <section id="how">
                 <div class="tag reveal">Getting Started</div>
                 <h2 class="section-heading reveal d1">Three steps.<br>That's it.</h2>
-                <p class="section-desc reveal d2">No downloads. No signups. Connect in under a minute.</p>
+                <p class="section-desc reveal d2">No extra apps. Fast onboarding. Start automating in under a minute.</p>
 
                 <div class="steps">
                     <div class="step reveal d1">

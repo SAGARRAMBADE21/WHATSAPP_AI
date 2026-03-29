@@ -4,58 +4,116 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sign In — Workspace Navigator</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg: #090909;
+            --card: rgba(255, 255, 255, 0.05);
+            --border: rgba(255, 255, 255, 0.14);
+            --text: #f8f8f8;
+            --muted: #b0b0b0;
+            --accent: #ff6a2f;
+            --accent-dark: #d75420;
+            --ok: #3ddc84;
+        }
+
         body {
-            font-family: 'Inter', sans-serif;
-            background: #000;
-            color: #fff;
+            font-family: 'Space Grotesk', sans-serif;
+            background: var(--bg);
+            color: var(--text);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
             overflow: hidden;
+            padding: 20px;
         }
 
-        .ambient-glow {
+        .ambient-glow,
+        .ambient-glow-2 {
             position: absolute;
-            width: 600px;
-            height: 600px;
-            background: radial-gradient(circle, rgba(255,106,47,0.15) 0%, rgba(0,0,0,0) 70%);
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            border-radius: 999px;
             z-index: 0;
             pointer-events: none;
         }
 
+        .ambient-glow {
+            width: 620px;
+            height: 620px;
+            background: radial-gradient(circle, rgba(255, 106, 47, 0.2) 0%, rgba(255, 106, 47, 0) 70%);
+            top: -140px;
+            right: -120px;
+        }
+
+        .ambient-glow-2 {
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(61, 220, 132, 0.16) 0%, rgba(61, 220, 132, 0) 72%);
+            bottom: -170px;
+            left: -120px;
+        }
+
         .auth-card {
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            padding: 44px 40px;
-            border-radius: 24px;
+            background: linear-gradient(150deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+            border: 1px solid var(--border);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            padding: 42px 38px;
+            border-radius: 28px;
             width: 100%;
-            max-width: 420px;
+            max-width: 470px;
             z-index: 1;
-            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.4);
+            box-shadow: 0 36px 90px rgba(0, 0, 0, 0.45);
         }
 
         .auth-header { text-align: center; margin-bottom: 32px; }
         .auth-header .icon {
-            width: 56px; height: 56px; border-radius: 16px;
-            background: linear-gradient(135deg, #FF6A2F, #E5551A);
+            width: 58px;
+            height: 58px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--accent), var(--accent-dark));
             display: inline-flex; align-items: center; justify-content: center;
-            font-size: 24px; font-weight: 900; color: #fff;
-            margin-bottom: 16px; box-shadow: 0 8px 30px rgba(255,106,47,0.3);
+            font-size: 24px;
+            font-family: 'Sora', sans-serif;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 16px;
+            box-shadow: 0 10px 30px rgba(255, 106, 47, 0.32);
         }
+
         .auth-header h1 {
-            font-size: 26px; font-weight: 800; color: #fff; margin-bottom: 8px;
+            font-family: 'Sora', sans-serif;
+            font-size: 30px;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 10px;
+            letter-spacing: -0.8px;
         }
-        .auth-header p { color: #888; font-size: 14px; line-height: 1.5; }
+        .auth-header p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+        .auth-highlights {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .auth-highlights div {
+            border: 1px solid rgba(255, 255, 255, 0.11);
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 10px 8px;
+            text-align: center;
+            font-size: 11px;
+            color: #d6d6d6;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
 
         .btn-google {
             width: 100%;
@@ -64,32 +122,40 @@
             border: none;
             padding: 15px;
             border-radius: 12px;
-            font-size: 16px;
-            font-weight: 600;
+            font-size: 15px;
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.2s ease;
+            transition: all 0.25s ease;
             display: flex; align-items: center; justify-content: center; gap: 10px;
             text-decoration: none;
         }
-        .btn-google:hover { background: #f1f1f1; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(255,255,255,0.1); }
+        .btn-google:hover {
+            background: #f3f3f3;
+            transform: translateY(-2px);
+            box-shadow: 0 10px 28px rgba(255, 255, 255, 0.14);
+        }
 
         .divider {
             display: flex; align-items: center; gap: 16px;
-            margin: 28px 0; color: #444; font-size: 13px;
+            margin: 26px 0;
+            color: #636363;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
         }
         .divider::before, .divider::after {
             content: ''; flex: 1; height: 1px;
-            background: rgba(255,255,255,0.08);
+            background: rgba(255,255,255,0.12);
         }
 
         .recent-session {
             display: none; padding: 16px; border-radius: 12px;
-            background: rgba(255,255,255,0.02);
-            border: 1px solid rgba(255,255,255,0.06);
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.1);
             margin-bottom: 20px;
         }
         .recent-session.visible { display: flex; align-items: center; gap: 14px; cursor: pointer; transition: all 0.2s; }
-        .recent-session:hover { border-color: rgba(255,106,47,0.3); background: rgba(255,106,47,0.04); }
+        .recent-session:hover { border-color: rgba(255,106,47,0.36); background: rgba(255,106,47,0.07); }
         .recent-avatar {
             width: 40px; height: 40px; border-radius: 50%;
             background: linear-gradient(135deg, #4285F4, #34A853);
@@ -98,54 +164,88 @@
         }
         .recent-info { flex: 1; }
         .recent-email { font-size: 14px; font-weight: 600; color: #fff; }
-        .recent-label { font-size: 12px; color: #666; margin-top: 2px; }
+        .recent-label { font-size: 12px; color: #919191; margin-top: 2px; }
 
         .toggle-mode {
             text-align: center;
             margin-top: 24px;
             font-size: 14px;
-            color: #666;
+            color: #909090;
         }
-        .toggle-mode a { color: #FF6A2F; font-weight: 600; text-decoration: none; transition: color 0.2s; }
+        .toggle-mode a { color: var(--accent); font-weight: 700; text-decoration: none; transition: color 0.2s; }
         .toggle-mode a:hover { color: #fff; }
 
         #error-msg {
-            color: #ff4b4b; font-size: 14px; text-align: center;
+            color: #ff6d6d; font-size: 14px; text-align: center;
             margin-bottom: 15px; display: none;
-            background: rgba(255, 75, 75, 0.1); padding: 10px;
-            border-radius: 8px; border: 1px solid rgba(255, 75, 75, 0.2);
+            background: rgba(255, 75, 75, 0.13); padding: 10px;
+            border-radius: 10px; border: 1px solid rgba(255, 75, 75, 0.28);
         }
 
         .status-badge {
             display: inline-flex; align-items: center; gap: 6px;
             padding: 6px 14px; border-radius: 20px;
-            background: rgba(66,133,244,0.1); border: 1px solid rgba(66,133,244,0.2);
-            color: #4285F4; font-size: 12px; font-weight: 600;
+            background: rgba(61,220,132,0.09);
+            border: 1px solid rgba(61,220,132,0.22);
+            color: var(--ok);
+            font-size: 12px;
+            font-weight: 700;
             margin-bottom: 16px;
+        }
+
+        .footnote {
+            margin-top: 18px;
+            text-align: center;
+            color: #8a8a8a;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
+        @media (max-width: 600px) {
+            .auth-card {
+                padding: 34px 22px;
+                border-radius: 22px;
+            }
+
+            .auth-header h1 {
+                font-size: 26px;
+            }
+
+            .auth-highlights {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="ambient-glow"></div>
+    <div class="ambient-glow-2"></div>
 
     <div class="auth-card">
         <div class="auth-header">
             <div class="icon">WN</div>
-            <div class="status-badge">Secure Google Login</div>
+            <div class="status-badge">Secure OAuth Sign-In</div>
             <h1>Welcome Back</h1>
-            <p>Sign in to your Workspace Navigator dashboard and WhatsApp assistant.</p>
+            <p>Continue to your dashboard and control Workspace from WhatsApp in one thread.</p>
+        </div>
+
+        <div class="auth-highlights">
+            <div>Gmail Control</div>
+            <div>Calendar Actions</div>
+            <div>Drive + Docs</div>
         </div>
 
         <div id="error-msg"></div>
 
-        <!-- Recent session (shown if user was previously logged in) -->
         <div class="recent-session" id="recent-session" onclick="window.location.href='/auth/start?mode=signin'">
             <div class="recent-avatar" id="recent-avatar">?</div>
             <div class="recent-info">
                 <div class="recent-email" id="recent-email">—</div>
-                <div class="recent-label">Click to sign in again</div>
+                <div class="recent-label">Resume with this Google account</div>
             </div>
         </div>
+
+        <div class="divider">Google Account</div>
 
         <a href="/auth/start?mode=signin" class="btn-google">
             <svg viewBox="0 0 24 24" width="20" height="20">
@@ -159,6 +259,10 @@
 
         <div class="toggle-mode">
             Don't have an account? <a href="/register.html">Create one</a>
+        </div>
+
+        <div class="footnote">
+            By continuing, your Google access remains encrypted and revocable anytime.
         </div>
     </div>
 
@@ -181,13 +285,9 @@
             window.location.href = '/dashboard.html';
         }
 
-        // Only show recent session if user has a valid token (not logged out)
+        // Show recent known account to reduce sign-in friction.
         const lastEmail = localStorage.getItem('navigator_last_email');
-        const hasToken = localStorage.getItem('navigator_token');
-        if (lastEmail && !hasToken) {
-            // User logged out — clean up stored email
-            localStorage.removeItem('navigator_last_email');
-        } else if (lastEmail && hasToken) {
+        if (lastEmail) {
             const el = document.getElementById('recent-session');
             el.classList.add('visible');
             document.getElementById('recent-email').textContent = lastEmail;
