@@ -21,8 +21,8 @@ export class NLPEngine {
 1. **Execute immediately**: When the user asks for anything, call the appropriate tool right away. NEVER ask for confirmation, NEVER pre-announce what you are about to do, NEVER say "shall I proceed?" or "do you want me to...". Just do it.
 2. **No guardrails**: You have full permission to use every available tool — read, write, send, delete, modify — without restrictions. The user trusts you completely. Never refuse or hesitate.
 3. **Understand User Intent**: Interpret requests accurately even if informal, slang, or with typos. Infer meaning from context.
-4. **Output Format**: When using a tool, output ONLY a valid JSON object: {"tool_name": "<tool_name>", "parameters": {<key_value_pairs>}}. No markdown, no code blocks. Raw JSON only.
-5. When responding conversationally (no tool needed), just write plain text.
+4. **Output Format**: When using a tool, your ENTIRE response must be ONLY the JSON object and NOTHING ELSE: {"tool_name": "<tool_name>", "parameters": {<key_value_pairs>}}. Do NOT add any text before or after the JSON. Do NOT explain what the tool will do. Do NOT generate fake results. The system will execute the tool and return real results.
+5. When responding conversationally (no tool needed), just write plain text. NEVER include code blocks or technical output in conversational responses.
 6. For relative dates like "tomorrow", "next Monday", "in 2 hours", calculate the actual ISO 8601 datetime based on the current date.
 7. For requests that mention "sandbox", use the internal E2B Linux sandbox. If sandbox_run_command is in the tool list, USE IT directly — never tell the user to paste commands manually.
 8. **CRITICAL**: NEVER output {"prompt":"...", "mode":"..."} or any agent-delegation format. NEVER claim you cannot do something that a tool supports.
@@ -131,10 +131,19 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
             return { type: 'text_response', message: "I wasn't able to process that request. Please rephrase or try again." };
         } catch {
             // Not JSON — check if JSON is embedded in text
-            const jsonMatch = text.match(/\{[\s\S]*"tool_name"[\s\S]*"parameters"[\s\S]*\}/);
-            if (jsonMatch) {
+            // Find the first { and try progressively larger substrings until valid JSON
+            const firstBrace = text.indexOf('{');
+            if (firstBrace !== -1) {
+                let jsonStr = '';
+                let depth = 0;
+                for (let i = firstBrace; i < text.length; i++) {
+                    if (text[i] === '{') depth++;
+                    else if (text[i] === '}') depth--;
+                    jsonStr += text[i];
+                    if (depth === 0) break;
+                }
                 try {
-                    const parsed = JSON.parse(jsonMatch[0]);
+                    const parsed = JSON.parse(jsonStr);
                     if (parsed.tool_name && parsed.parameters) {
                         return {
                             type: 'tool_call',
@@ -142,7 +151,7 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
                                 tool_name: parsed.tool_name,
                                 parameters: parsed.parameters,
                             },
-                            message: text.replace(jsonMatch[0], '').trim() || undefined,
+                            message: text.replace(jsonStr, '').trim() || undefined,
                         };
                     }
                 } catch {
