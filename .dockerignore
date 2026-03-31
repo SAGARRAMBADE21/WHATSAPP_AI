@@ -2,9 +2,9 @@ node_modules
 dist
 .env
 .env.*
-auth/
-data/
-logs/
+/auth/
+/data/
+/logs/
 *.log
 .git
 .gitignore
