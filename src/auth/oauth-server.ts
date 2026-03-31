@@ -283,7 +283,7 @@ export class OAuthCallbackServer {
 
                     // ── Serve landing page and static files ──
                     if (!url.pathname.includes('oauth2callback') && !url.pathname.includes('/auth/callback')) {
-                        const publicDir = path.resolve(__dirname, '../../public');
+                        const publicDir = path.resolve(process.cwd(), 'public');
 
                         // Serve index.html for root path
                         let filePath = url.pathname === '/'
