@@ -409,18 +409,6 @@ export class SessionManager {
     }
 
     private setupDecryptionErrorHandler(sessionId: string, sock: any) {
-        // Baileys emits error events when it fails to decrypt messages
-        // We catch these to prevent noisy logs and auto-heal corrupted sessions
-        const origEmit = sock.ev.emit.bind(sock.ev);
-        sock.ev.emit = (event: string, ...args: any[]) => {
-            // Let all events pass through normally
-            return origEmit(event, ...args);
-        };
-
-        // Listen for messages.upsert errors by wrapping the handler
-        // The actual PreKeyError/SessionError comes from Signal protocol decryption
-        // and is logged by pino — we've silenced that with level: 'silent'.
-        // Here we add a process-level handler to catch any uncaught errors from Baileys
         const handleDecryptError = async (error: Error) => {
             const errName = error?.name || '';
             const errMsg = error?.message || '';
@@ -430,27 +418,52 @@ export class SessionManager {
                 errName === 'SessionError' ||
                 errMsg.includes('Invalid PreKey ID') ||
                 errMsg.includes('failed to decrypt') ||
-                errMsg.includes('No matching sessions');
+                errMsg.includes('No matching sessions') ||
+                errMsg.includes('Bad MAC');
 
-            if (!isDecryptError) return; // Not our error, let it propagate
+            if (!isDecryptError) return;
 
             const count = (this.decryptErrorCounts.get(sessionId) || 0) + 1;
             this.decryptErrorCounts.set(sessionId, count);
 
-            console.log(chalk.gray(`[Session ${sessionId}] Decryption error #${count} (${errName}): ${errMsg.substring(0, 80)} — this is normal for first sync`));
+            // Suppress noisy repeated logs — only log every 5th error
+            if (count % 5 === 1) {
+                console.log(chalk.gray(`[Session ${sessionId}] Decryption error #${count} (${errName}): ${errMsg.substring(0, 80)}`));
+            }
 
             if (count >= SessionManager.MAX_DECRYPT_ERRORS) {
-                console.log(chalk.yellow(`[Session ${sessionId}] Too many decryption errors (${count}). Clearing corrupted pre-keys...`));
-                await this.clearCorruptedPreKeys(sessionId);
+                console.log(chalk.yellow(`[Session ${sessionId}] Too many decryption errors (${count}). Resetting session...`));
+
+                // Clear all session auth data — Bad MAC means keys are fully corrupted
+                await this.db.collection('baileys_auth').deleteMany({ sessionId });
+                this.sessions.delete(sessionId);
                 this.decryptErrorCounts.set(sessionId, 0);
-                console.log(chalk.green(`[Session ${sessionId}] Pre-keys cleared. Session will self-heal on next messages.`));
+
+                // End the socket to force a clean re-pair with new QR code
+                try { sock.end(undefined); } catch { /* already closed */ }
+
+                console.log(chalk.green(`[Session ${sessionId}] Session auth cleared. User will need to scan QR code again.`));
             }
         };
 
-        // Baileys internally catches most of these, but in case they bubble up:
-        process.on('unhandledRejection', (reason: any) => {
+        // Catch unhandled promise rejections from libsignal/Baileys decryption
+        const rejectionHandler = (reason: any) => {
             if (reason instanceof Error) {
                 handleDecryptError(reason).catch(() => { });
+            }
+        };
+        process.on('unhandledRejection', rejectionHandler);
+
+        // Also listen for Baileys' own error logging via a custom pino destination
+        // Baileys logs "Session error" via its logger — catch via socket ws error event
+        sock.ws?.on('error', (err: Error) => {
+            handleDecryptError(err).catch(() => { });
+        });
+
+        // Clean up handler when socket closes to prevent listener leaks
+        sock.ev.on('connection.update', (update: any) => {
+            if (update.connection === 'close') {
+                process.removeListener('unhandledRejection', rejectionHandler);
             }
         });
     }
