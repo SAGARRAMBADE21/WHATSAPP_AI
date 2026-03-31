@@ -12,7 +12,7 @@ RUN npm install
 # Copy source and compile TypeScript → JS
 COPY tsconfig.json ./
 COPY src ./src
-RUN npm run build
+RUN NODE_OPTIONS="--max-old-space-size=512" npm run build
 
 # Prune devDependencies IN the builder — faster than re-running npm ci in prod
 RUN npm prune --omit=dev && npm cache clean --force
