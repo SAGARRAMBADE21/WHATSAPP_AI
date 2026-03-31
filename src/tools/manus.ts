@@ -1,28 +1,149 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
-import path from "path";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const execFileAsync = promisify(execFile);
-const MANUS_SCRIPT = path.resolve(process.cwd(), "skills/manus-computer/manus skill/manus/scripts/manus.py");
+const MANUS_BASE_URL = process.env.MANUS_BASE_URL || "https://api.manus.ai/v1";
+
+async function manusApi(method: string, apiPath: string, apiKey: string, body?: any): Promise<any> {
+  const url = `${MANUS_BASE_URL}${apiPath}`;
+  const options: RequestInit = {
+    method,
+    headers: {
+      "accept": "application/json",
+      "content-type": "application/json",
+      "API_KEY": apiKey,
+    },
+  };
+  if (body) options.body = JSON.stringify(body);
+
+  const response = await fetch(url, options);
+  if (response.status === 204) return null;
+
+  let data: any;
+  try {
+    data = await response.json();
+  } catch {
+    throw new Error(`Manus API returned non-JSON response (status ${response.status})`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Manus API error ${response.status}: ${JSON.stringify(data).substring(0, 300)}`);
+  }
+  return data;
+}
+
+async function pollTask(taskId: string, apiKey: string): Promise<string> {
+  let output = "";
+
+  // Poll for up to 120 seconds
+  for (let i = 0; i < 60; i++) {
+    await new Promise(r => setTimeout(r, 2000));
+
+    try {
+      const task = await manusApi("GET", `/tasks/${taskId}`, apiKey);
+      let current = "";
+      for (const item of (task.output || [])) {
+        if (item.role !== "assistant") continue;
+        for (const c of (item.content || [])) {
+          if (c.text) current += c.text;
+        }
+      }
+      output = current;
+
+      const status = task.status;
+      if (status === "completed" || status === "failed" || status === "cancelled") {
+        const title = task.metadata?.task_title || "";
+        const taskUrl = task.metadata?.task_url || "";
+        let result = title ? `${title}\n` : "";
+        result += `Status: ${status}`;
+        if (taskUrl) result += `\nURL: ${taskUrl}`;
+        if (output) result += `\n\n${output}`;
+        return result;
+      }
+    } catch {
+      // Network blip, continue polling
+    }
+  }
+
+  return output || "Task is still running. Check back later.";
+}
 
 async function runManusCommand(apiKey: string | undefined, command: string, ...args: string[]): Promise<string> {
+  if (!apiKey) return "Error: Manus API key not configured. Add it in the dashboard settings.";
+
   try {
-    const cleanArgs = args
-      .filter(arg => arg !== undefined && arg !== null)
-      .map(arg => String(arg));
+    switch (command) {
+      case "send": {
+        const prompt = args[0];
+        const mode = args.includes("--mode") ? args[args.indexOf("--mode") + 1] : "agent";
+        const body: any = { prompt, agent_profile: "manus-1.6", task_mode: mode };
+        const resp = await manusApi("POST", "/tasks", apiKey, body);
+        if (!resp) return "Failed to create task.";
+        return await pollTask(resp.task_id, apiKey);
+      }
 
-    const env = { ...process.env };
-    if (apiKey) env.MANUS_API_KEY = apiKey;
+      case "hybrid": {
+        const body = { prompt: args[0], agent_profile: "manus-1.6", task_mode: "hybrid" };
+        const resp = await manusApi("POST", "/tasks", apiKey, body);
+        if (!resp) return "Failed to create hybrid task.";
+        return await pollTask(resp.task_id, apiKey);
+      }
 
-    const { stdout, stderr } = await execFileAsync("python", [MANUS_SCRIPT, command, ...cleanArgs], {
-      env
-    });
-    return stdout || stderr;
+      case "tasks": {
+        const limit = args.includes("--limit") ? args[args.indexOf("--limit") + 1] : "20";
+        const data = await manusApi("GET", `/tasks?limit=${limit}`, apiKey);
+        const tasks = data?.data || [];
+        if (tasks.length === 0) return "No tasks found.";
+        return `Found ${tasks.length} task(s):\n` +
+          tasks.map((t: any) => `  ${t.id} | ${t.status} | ${t.metadata?.task_title || "(untitled)"}`).join("\n");
+      }
+
+      case "task": {
+        const task = await manusApi("GET", `/tasks/${args[0]}`, apiKey);
+        if (!task) return "Task not found.";
+        let output = "";
+        for (const item of (task.output || [])) {
+          if (item.role !== "assistant") continue;
+          for (const c of (item.content || [])) {
+            if (c.text?.trim()) output += c.text.trim() + "\n";
+          }
+        }
+        const title = task.metadata?.task_title || "";
+        return `${title ? title + "\n" : ""}Status: ${task.status}\n${output || "(no output yet)"}`;
+      }
+
+      case "projects": {
+        const data = await manusApi("GET", "/projects", apiKey);
+        const projects = data?.data || [];
+        if (projects.length === 0) return "No projects found.";
+        return `Found ${projects.length} project(s):\n` +
+          projects.map((p: any) => `  ${p.id} | ${p.name || "(unnamed)"}`).join("\n");
+      }
+
+      case "exec": {
+        // Local execution is not supported in cloud deployment
+        return "Local shell execution is not available in cloud deployment. Use the E2B sandbox instead.";
+      }
+
+      case "file-list": {
+        return "Local file listing is not available in cloud deployment. Use the E2B sandbox instead.";
+      }
+
+      case "file-read": {
+        return "Local file reading is not available in cloud deployment. Use the E2B sandbox instead.";
+      }
+
+      case "desktop-screenshot":
+      case "desktop-apps":
+      case "desktop-sysinfo": {
+        return "Desktop control is not available in cloud deployment.";
+      }
+
+      default:
+        return `Unknown Manus command: ${command}`;
+    }
   } catch (error: any) {
-    return error.stdout || error.stderr || error.message;
+    return error.message || String(error);
   }
 }
 
@@ -75,7 +196,7 @@ export const manusTools = [
     }
   },
 
-  // 3. Local Execution
+  // 3. Local Execution (redirects to E2B sandbox in cloud)
   {
     type: "function",
     function: {
@@ -162,7 +283,6 @@ export async function handleManusToolCall(toolCall: any, apiKey?: string): Promi
 
     // Desktop
     case "manus_desktop_screenshot":
-      // Send directly back since it outputs path or success
       return await runManusCommand(apiKey, "desktop-screenshot");
     case "manus_desktop_apps":
       return await runManusCommand(apiKey, "desktop-apps");

@@ -47,9 +47,6 @@ COPY --from=builder /app/dist ./dist
 # Copy static frontend files
 COPY public ./public
 
-# Copy skill scripts (v0, Manus)
-COPY skills ./skills
-
 # Copy the DNS preload script — REQUIRED for MongoDB Atlas SRV resolution
 COPY dns-preload.js ./dns-preload.js
 
