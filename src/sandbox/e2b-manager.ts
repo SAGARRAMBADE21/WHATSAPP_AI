@@ -315,9 +315,6 @@ exit 1`,
 
         try {
             const result = await sbx.commands.run(cmd, { timeoutMs: 30_000 });
-            await this.memosStore.storeEpisodic(userEmail, `Command: ${cmd.slice(0, 80)}`, 'orchestrator', {
-                tags: ['sandbox', 'command'], importance: 'low',
-            });
             return { stdout: result.stdout ?? '', stderr: result.stderr ?? '', exitCode: result.exitCode ?? 0 };
         } catch (e: any) {
             // E2B throws on non-zero exits; normalize to a stable API response.
@@ -332,9 +329,6 @@ exit 1`,
                 await sbx.commands.run(`mkdir -p '${cdMiss}'`, { timeoutMs: 10_000 });
                 try {
                     const retry = await sbx.commands.run(cmd, { timeoutMs: 30_000 });
-                    await this.memosStore.storeEpisodic(userEmail, `Command(retry): ${cmd.slice(0, 80)}`, 'orchestrator', {
-                        tags: ['sandbox', 'command'], importance: 'low',
-                    });
                     return { stdout: retry.stdout ?? '', stderr: retry.stderr ?? '', exitCode: retry.exitCode ?? 0 };
                 } catch (retryErr: any) {
                     const retryResult = retryErr?.result;
@@ -346,9 +340,6 @@ exit 1`,
                 }
             }
 
-            await this.memosStore.storeEpisodic(userEmail, `Command failed: ${cmd.slice(0, 80)}`, 'orchestrator', {
-                tags: ['sandbox', 'command', 'error'], importance: 'low',
-            });
             return { stdout, stderr, exitCode };
         }
     }
