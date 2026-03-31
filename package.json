@@ -4,7 +4,7 @@
     "description": "WhatsApp-based AI Assistant for Google Workspace",
     "main": "dist/index.js",
     "scripts": {
-        "build": "tsc",
+        "build": "node build.js",
         "start": "node --require ./dns-preload.js dist/index.js",
         "dev": "node --require ./dns-preload.js --import tsx src/index.ts",
         "dev:watch": "nodemon --require ./dns-preload.js --exec 'node --loader tsx src/index.ts'"
@@ -33,6 +33,7 @@
         "@types/jsonwebtoken": "^9.0.10",
         "@types/node": "^22.10.0",
         "@types/uuid": "^10.0.0",
+        "esbuild": "^0.24.0",
         "nodemon": "^3.1.9",
         "ts-node": "^10.9.2",
         "tsx": "^4.21.0",

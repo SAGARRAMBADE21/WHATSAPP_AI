@@ -9,10 +9,11 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install
 
-# Copy source and compile TypeScript → JS
+# Copy build script and source, then compile
+COPY build.js ./
 COPY tsconfig.json ./
 COPY src ./src
-RUN NODE_OPTIONS="--max-old-space-size=900" npm run build
+RUN npm run build
 
 # Prune devDependencies IN the builder — faster than re-running npm ci in prod
 RUN npm prune --omit=dev && npm cache clean --force
