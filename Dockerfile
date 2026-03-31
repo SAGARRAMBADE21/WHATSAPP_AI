@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install ALL dependencies (devDeps needed for tsc)
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source and compile TypeScript → JS
 COPY tsconfig.json ./
@@ -16,6 +16,9 @@ RUN npm run build
 
 # Prune devDependencies IN the builder — faster than re-running npm ci in prod
 RUN npm prune --omit=dev && npm cache clean --force
+
+# Remove package-lock.json from image (not needed at runtime)
+RUN rm -f package-lock.json
 
 # ─────────────────────────────────────────────
 # Stage 2 — Production: lean runtime image
