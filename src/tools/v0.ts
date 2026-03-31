@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const execAsync = promisify(exec);
-const V0_SCRIPT = path.resolve(__dirname, "../../skills/v0skill/scripts/v0_platform.mjs");
+const V0_SCRIPT = path.resolve(process.cwd(), "skills/v0skill/scripts/v0_platform.mjs");
 
 async function runV0Command(apiKey: string | undefined, command: string, ...args: string[]): Promise<string> {
   try {

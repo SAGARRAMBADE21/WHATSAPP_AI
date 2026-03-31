@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const execAsync = promisify(exec);
-const MANUS_SCRIPT = path.resolve(__dirname, "../../skills/manus-computer/manus skill/manus/scripts/manus.py");
+const MANUS_SCRIPT = path.resolve(process.cwd(), "skills/manus-computer/manus skill/manus/scripts/manus.py");
 
 async function runManusCommand(apiKey: string | undefined, command: string, ...args: string[]): Promise<string> {
   try {
