@@ -2,9 +2,11 @@ node_modules
 dist
 .env
 .env.*
-/auth/
-/data/
-/logs/
+# Exclude root-level runtime dirs (NOT src/auth, src/types, etc.)
+auth/
+data/
+logs/
+!src/
 *.log
 .git
 .gitignore
