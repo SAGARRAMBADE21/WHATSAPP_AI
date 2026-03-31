@@ -13,6 +13,7 @@ RUN npm install
 COPY build.js ./
 COPY tsconfig.json ./
 COPY src ./src
+RUN echo "=== Verifying src/auth/ ===" && ls -la src/auth/ && echo "=== OK ===" 
 RUN npm run build
 
 # Prune devDependencies IN the builder — faster than re-running npm ci in prod
