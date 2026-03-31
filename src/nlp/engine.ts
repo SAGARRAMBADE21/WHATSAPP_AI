@@ -130,13 +130,13 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
             }
             return { type: 'text_response', message: "I wasn't able to process that request. Please rephrase or try again." };
         } catch {
-            // Not JSON — check if JSON is embedded in text
-            // Find the first { and try progressively larger substrings until valid JSON
-            const firstBrace = text.indexOf('{');
-            if (firstBrace !== -1) {
+            // Not JSON — check if JSON tool call is embedded in text
+            // Look specifically for {"tool_name" pattern
+            const toolCallStart = text.indexOf('{"tool_name"');
+            if (toolCallStart !== -1) {
                 let jsonStr = '';
                 let depth = 0;
-                for (let i = firstBrace; i < text.length; i++) {
+                for (let i = toolCallStart; i < text.length; i++) {
                     if (text[i] === '{') depth++;
                     else if (text[i] === '}') depth--;
                     jsonStr += text[i];
@@ -145,13 +145,14 @@ ${memoryContext ? `**User Context & Memory:**\n${memoryContext}` : ''}`;
                 try {
                     const parsed = JSON.parse(jsonStr);
                     if (parsed.tool_name && parsed.parameters) {
+                        // When tool call is found, do NOT pass remaining text as message
+                        // The tool result will be the response
                         return {
                             type: 'tool_call',
                             toolCall: {
                                 tool_name: parsed.tool_name,
                                 parameters: parsed.parameters,
                             },
-                            message: text.replace(jsonStr, '').trim() || undefined,
                         };
                     }
                 } catch {
