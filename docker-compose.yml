@@ -1,42 +1,68 @@
 
-
 services:
-  # ─────────────────────────────────────────
-  # WhatsApp AI Application
-  # ─────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # Workspace Navigator — WhatsApp AI App
+  # ─────────────────────────────────────────────────────────────
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: whatsapp-ai
     restart: unless-stopped
+
+    # Public port — in production, override with docker-compose.prod.yml
+    # which locks this to 127.0.0.1:3000 (Nginx handles external traffic)
     ports:
       - "3000:3000"
+
+    # Load all secrets from .env file
     env_file:
       - .env
+
     environment:
-      # Override MongoDB URI to point to the mongo service
+      # ── Database ──────────────────────────────────────────────
+      # For local dev: points to the mongo service below
+      # In production (docker-compose.prod.yml): overridden to MongoDB Atlas URI
       MONGODB_URI: mongodb://mongo:27017
+      MONGODB_DB_NAME: ${MONGODB_DB_NAME:-workspace_navigator}
+
+      # ── Paths (container-internal, NOT overridden by .env) ───
       AUTH_STATE_PATH: /app/auth/baileys_auth
       MEMORY_DB_PATH: /app/data/memory/navigator.db
+      GOOGLE_TOKEN_PATH: /app/data/tokens/google_tokens.json
+
+      # ── E2B Cloud Sandbox (outbound HTTPS to e2b.dev) ────────
+      E2B_API_KEY: ${E2B_API_KEY}
+
+      # ── Security secrets ─────────────────────────────────────
+      JWT_SECRET: ${JWT_SECRET}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
+
     volumes:
-      # Persist WhatsApp session auth state between restarts
+      # WhatsApp Baileys auth state — survive container restarts without re-scanning QR
       - whatsapp_auth:/app/auth/baileys_auth
-      # Persist memory / SQLite data
+      # Per-user Google OAuth token files (written by user-manager.ts)
+      - google_tokens:/app/data/tokens
+      # SQLite memory DB (used by MemOS / memory manager)
       - app_data:/app/data/memory
+      # App logs
+      - app_logs:/app/logs
+
     depends_on:
       mongo:
         condition: service_healthy
+
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
 
-  # ─────────────────────────────────────────
-  # MongoDB (skip if using MongoDB Atlas)
-  # ─────────────────────────────────────────
+  # ─────────────────────────────────────────────────────────────
+  # MongoDB — Local Dev Only
+  # In production: use MongoDB Atlas (see docker-compose.prod.yml)
+  # ─────────────────────────────────────────────────────────────
   mongo:
     image: mongo:7
     container_name: whatsapp-mongo
@@ -44,20 +70,26 @@ services:
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      # Use mongosh with shell so the exit code reflects the JS result
       test: ["CMD", "mongosh", "--quiet", "--eval", "quit(db.runCommand({ping:1}).ok ? 0 : 1)"]
       interval: 15s
       timeout: 10s
       retries: 5
       start_period: 30s
-    # Expose only inside Docker network (not to the host)
+    # Expose only inside Docker network — not reachable from outside
     expose:
       - "27017"
 
+# ─────────────────────────────────────────────────────────────
+# Named volumes — persist data across container restarts
+# ─────────────────────────────────────────────────────────────
 volumes:
   mongo_data:
     driver: local
   whatsapp_auth:
     driver: local
+  google_tokens:
+    driver: local
   app_data:
+    driver: local
+  app_logs:
     driver: local

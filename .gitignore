@@ -34,3 +34,8 @@ Thumbs.db
 
 # Testing
 coverage/
+
+# AWS SSH Keys — NEVER commit these to GitHub!
+*.pem
+*.key
+whatsapp-ai-key.pem

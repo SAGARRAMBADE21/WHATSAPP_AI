@@ -19,12 +19,12 @@ RUN npm run build
 # ─────────────────────────────────────────────
 FROM node:20-alpine AS production
 
-# Install curl for health checks (wget is absent in node:alpine)
-RUN apk add --no-cache curl
+# Install curl (healthcheck) + git (for sandbox clone commands)
+RUN apk add --no-cache curl git
 
 WORKDIR /app
 
-# Non-root user for security — create BEFORE chown
+# Non-root user for security
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup
 
 # Install only production dependencies
@@ -34,22 +34,31 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy compiled output from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy static assets served by the OAuth server
-# oauth-server.ts resolves: path.resolve(__dirname, '../../public')
-# __dirname = /app/dist/auth  →  ../../public = /app/public  ✓
+# Copy static frontend files (served by oauth-server.ts)
+# oauth-server uses: path.resolve(__dirname, '../../public')
+# __dirname at runtime = /app/dist/auth → ../../public = /app/public ✓
 COPY public ./public
 
-# Create writable directories for runtime data and fix ownership
-# (in production these are overridden by Docker volume mounts)
-RUN mkdir -p auth/baileys_auth data/memory \
+# Copy the DNS preload script — REQUIRED for MongoDB Atlas SRV resolution
+# Used in CMD as: node --require ./dns-preload.js dist/index.js
+COPY dns-preload.js ./dns-preload.js
+
+# Create all writable runtime directories:
+#   auth/baileys_auth  — WhatsApp Baileys auth state (mounted as Docker volume in prod)
+#   data/memory        — SQLite memory DB (mounted as Docker volume in prod)
+#   data/tokens        — Per-user Google OAuth token JSON files (mounted as Docker volume)
+#   logs               — PM2 / app logs
+RUN mkdir -p auth/baileys_auth data/memory data/tokens logs \
     && chown -R appuser:appgroup /app
 
 USER appuser
 
 EXPOSE 3000
 
-# Health check — use curl (available via apk above)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=45s --retries=3 \
+# Health check — poll the root HTTP endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -f http://localhost:3000/ || exit 1
 
-CMD ["node", "dist/index.js"]
+# IMPORTANT: --require dns-preload.js MUST come before dist/index.js
+# Without it, MongoDB Atlas SRV lookups fail on startup (DNS resolution race condition)
+CMD ["node", "--require", "./dns-preload.js", "dist/index.js"]

@@ -1,42 +1,55 @@
 # ─────────────────────────────────────────────────────────────
-# Production Docker Compose Override
-# Usage: docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+# Production Docker Compose Override — AWS EC2 Deployment
 #
-# What this file does:
-#   - Removes local MongoDB (uses MongoDB Atlas instead)
-#   - Adds memory limits
-#   - Binds app to localhost only (Nginx handles public traffic)
-#   - Adds production environment flags
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# What this file does vs base docker-compose.yml:
+#   ✓ Binds app to 127.0.0.1 only (Nginx handles external HTTPS traffic)
+#   ✓ Uses MongoDB Atlas instead of local mongo container
+#   ✓ Adds memory limits (safe for t3.small 2GB RAM)
+#   ✓ Sets NODE_ENV=production and LOG_LEVEL=warn
+#   ✓ Uses restart: always (stricter — restarts even on manual stop)
+#   ✓ Disables local mongo service
 # ─────────────────────────────────────────────────────────────
 
 services:
   app:
-    # In production, only listen on localhost — Nginx handles HTTPS
+    # In production, bind only to localhost — Nginx handles public HTTPS
     ports:
       - "127.0.0.1:3000:3000"
 
     environment:
       NODE_ENV: production
-      # MongoDB Atlas URI — set this in your EC2 .env file:
-      # MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/workspace_navigator
       LOG_LEVEL: warn
 
-    # Resource limits — prevents runaway memory on t3.small
+      # ── MongoDB Atlas (production) ────────────────────────────
+      # Set MONGODB_URI in your EC2 .env file to your Atlas connection string:
+      # MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/workspace_navigator
+      # This line intentionally left without a value so it reads from .env
+      MONGODB_URI: ${MONGODB_URI}
+
+      # ── Google OAuth redirect — MUST match your domain ───────
+      # Set in .env: GOOGLE_REDIRECT_URI=https://yourdomain.com/oauth2callback
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI}
+
+    # Resource limits — prevents runaway memory on t3.small / t3.micro
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 600M
         reservations:
           memory: 256M
 
-    # No longer depends on local mongo service
+    # No longer depends on local mongo in production
     depends_on: {}
 
-    restart: always   # Stricter than unless-stopped — restarts even on manual stop
+    # Always restart — even on manual stop (keeps WhatsApp session alive)
+    restart: always
 
-  # ── Disable local MongoDB in production ──
-  # Use MongoDB Atlas free tier instead:
-  # https://www.mongodb.com/cloud/atlas/register
+  # ── Disable local MongoDB in production ──────────────────────
+  # MongoDB Atlas free tier is used instead.
+  # To keep local mongo in prod (advanced), remove these lines.
   mongo:
     profiles:
-      - local-only   # Only starts if you explicitly run --profile local-only
+      - local-only   # Only starts with: docker compose --profile local-only up
