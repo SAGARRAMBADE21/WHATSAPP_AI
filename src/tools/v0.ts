@@ -1,24 +1,23 @@
-import { exec } from "child_process";
+import { execFile } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import dotenv from "dotenv";
 
 dotenv.config();
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const V0_SCRIPT = path.resolve(process.cwd(), "skills/v0skill/scripts/v0_platform.mjs");
 
 async function runV0Command(apiKey: string | undefined, command: string, ...args: string[]): Promise<string> {
   try {
-    const safeArgs = args.map(arg => {
-      if (arg === undefined || arg === null) return "";
-      return `"${String(arg).replace(/"/g, '\\"')}"`;
-    }).join(" ");
-    
+    const cleanArgs = args
+      .filter(arg => arg !== undefined && arg !== null)
+      .map(arg => String(arg));
+
     const env = { ...process.env };
     if (apiKey) env.V0_API_KEY = apiKey;
 
-    const { stdout, stderr } = await execAsync(`node "${V0_SCRIPT}" ${command} ${safeArgs}`, {
+    const { stdout, stderr } = await execFileAsync("node", [V0_SCRIPT, command, ...cleanArgs], {
       env
     });
     return stdout || stderr;
