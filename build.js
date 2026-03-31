@@ -1,38 +1,24 @@
-// build.js — replaces `tsc` for Docker production builds
-// Uses esbuild: ~20MB RAM vs ~900MB for tsc
+// build.js — esbuild BUNDLE mode for Docker production builds
+// Bundles ALL local source into a single dist/index.js
+// node_modules stay external (already in /app/node_modules)
+// Uses ~20MB RAM vs ~900MB for tsc
 const { build } = require('esbuild');
-const fs = require('fs');
-const path = require('path');
 
-function getTypeScriptFiles(dir) {
-    const files = [];
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-        const fullPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-            files.push(...getTypeScriptFiles(fullPath));
-        } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.d.ts')) {
-            files.push(fullPath);
-        }
-    }
-    return files;
-}
-
-const entryPoints = getTypeScriptFiles('src');
-console.log(`Building ${entryPoints.length} TypeScript files with esbuild...`);
+console.log('⚡ Building with esbuild (bundle mode)...');
 
 build({
-    entryPoints,
-    outbase: 'src',
-    outdir: 'dist',
+    entryPoints: ['src/index.ts'],   // single entry point
+    outfile: 'dist/index.js',         // single output file
     platform: 'node',
     target: 'node20',
     format: 'cjs',
+    bundle: true,                     // bundle ALL local imports into one file
+    packages: 'external',             // keep node_modules as external requires
     sourcemap: false,
     minify: false,
-    bundle: false,         // preserve file structure, like tsc
     logLevel: 'info',
 }).then(() => {
-    console.log('✅ Build complete!');
+    console.log('✅ Build complete! → dist/index.js');
 }).catch((err) => {
     console.error('❌ Build failed:', err);
     process.exit(1);
