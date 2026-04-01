@@ -125,7 +125,7 @@ export class AgentCore {
             // User hasn't completed Google OAuth yet — direct them to the web dashboard
             return '🔐 *Google Workspace Not Connected*\n\n' +
                 'To use Gmail, Calendar, Drive, Sheets & Docs:\n' +
-                '1. Open *http://localhost:3000* in your browser\n' +
+                '1. Open *http://43.205.202.70:3000* in your browser\n' +
                 '2. Sign in with Google\n' +
                 '3. Scan the QR code on the dashboard\n\n' +
                 'Your WhatsApp will be automatically linked!';

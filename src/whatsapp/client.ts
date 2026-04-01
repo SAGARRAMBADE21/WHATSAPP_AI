@@ -209,7 +209,7 @@ export class WhatsAppClient {
                         `We have upgraded to a secure web dashboard.\n\n` +
                         `To connect your Google Workspace:\n` +
                         `1. Open your computer browser\n` +
-                        `2. Go to: *http://localhost:3000*\n` +
+                        `2. Go to: *http://43.205.202.70:3000*\n` +
                         `3. Sign in with Google\n` +
                         `4. Scan the QR code displayed on the dashboard\n\n` +
                         `Your WhatsApp will be securely linked to your account!`;

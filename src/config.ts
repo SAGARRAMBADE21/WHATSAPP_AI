@@ -11,7 +11,7 @@ export const config = {
     google: {
         clientId: process.env.GOOGLE_CLIENT_ID || '',
         clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/oauth2callback',
+        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'http://43.205.202.70:3000/oauth2callback',
         tokenPath: path.resolve(process.env.GOOGLE_TOKEN_PATH || './auth/google_tokens.json'),
         scopes: [
             'openid',
