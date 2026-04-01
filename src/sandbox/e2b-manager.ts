@@ -21,10 +21,18 @@ interface SandboxSession {
     ideReady: boolean;
 }
 
+interface SandboxBackup {
+    userEmail: string;
+    files: { path: string; content: string }[];
+    backedUpAt: Date;
+}
+
 export class E2BSandboxManager {
     private col!: Collection<SandboxSession>;
+    private backupCol!: Collection<SandboxBackup>;
     private memosStore: MemOSStore;
     private keepaliveTimers = new Map<string, NodeJS.Timeout>();
+    private backupTimers = new Map<string, NodeJS.Timeout>();
     private installState = new Map<string, InstallState>(); // real-time install progress
     private initialized = false;
 
@@ -34,7 +42,9 @@ export class E2BSandboxManager {
 
     async initialize(db: Db): Promise<void> {
         this.col = db.collection<SandboxSession>('sandbox_sessions');
+        this.backupCol = db.collection<SandboxBackup>('sandbox_backups');
         await this.col.createIndex({ userEmail: 1 }, { unique: true });
+        await this.backupCol.createIndex({ userEmail: 1 }, { unique: true });
         this.initialized = true;
         console.log(chalk.gray('   ▸ E2B Sandbox Manager ready'));
     }
@@ -48,6 +58,7 @@ export class E2BSandboxManager {
             try {
                 const sbx = await Sandbox.connect(existing.sandboxId, { apiKey: process.env.E2B_API_KEY });
                 await this._keepalive(userEmail, sbx, existing.sandboxId);
+                this._startAutoBackup(userEmail);
                 await this.col.updateOne({ userEmail }, { $set: { lastActiveAt: new Date(), status: 'running' } });
 
                 if (existing.ideReady) {
@@ -63,7 +74,10 @@ export class E2BSandboxManager {
                 }
                 return { sandboxId: existing.sandboxId, isNew: false, ideUrl: existing.ideUrl, ideReady: existing.ideReady };
             } catch {
-                console.log(chalk.yellow(`   ⚠ Sandbox expired for ${userEmail}, creating new`));
+                console.log(chalk.yellow(`   ⚠ Sandbox expired for ${userEmail}, backing up & creating new`));
+                // Try to backup before marking dead (may fail if sandbox is truly gone)
+                await this.backupFiles(userEmail).catch(() => {});
+                this._clearAutoBackup(userEmail);
                 // Clear stale IDE URL so frontend doesn't load a dead sandbox
                 await this.col.updateOne({ userEmail }, {
                     $set: { status: 'dead', ideReady: false },
@@ -82,13 +96,17 @@ export class E2BSandboxManager {
         );
 
         await this._keepalive(userEmail, sbx, sandboxId);
+        this._startAutoBackup(userEmail);
+
+        // Restore previous files from backup
+        const restoredCount = await this._restoreFiles(userEmail, sbx);
 
         // Set checking phase synchronously before firing async install
         // so the very first frontend poll sees real state, not 'idle'
         this._setPhase(userEmail, 'checking', 5);
         this._installCodeServer(userEmail, sbx).catch(() => {});
 
-        await this.memosStore.storeEpisodic(userEmail, `Sandbox created (ID: ${sandboxId})`, 'orchestrator', {
+        await this.memosStore.storeEpisodic(userEmail, `Sandbox created (ID: ${sandboxId})${restoredCount ? ` — restored ${restoredCount} files from backup` : ''}`, 'orchestrator', {
             tags: ['sandbox', 'e2b', 'created'], importance: 'medium',
         });
 
@@ -414,11 +432,14 @@ exit 1`,
     async kill(userEmail: string): Promise<void> {
         const session = await this.col.findOne({ userEmail });
         if (!session) return;
+        // Backup files before killing
+        await this.backupFiles(userEmail).catch(() => {});
         try {
             const sbx = await Sandbox.connect(session.sandboxId, { apiKey: process.env.E2B_API_KEY });
             await sbx.kill();
         } catch {}
         this._clearKeepalive(userEmail);
+        this._clearAutoBackup(userEmail);
         await this.col.updateOne({ userEmail }, { $set: { status: 'dead', ideReady: false, ideUrl: undefined } });
     }
 
@@ -436,7 +457,11 @@ exit 1`,
                 await sbx.commands.run('echo keepalive');
                 await this.col.updateOne({ userEmail }, { $set: { lastActiveAt: new Date() } });
             } catch {
+                // Sandbox died — do a final backup before marking dead
+                console.log(chalk.yellow(`   ⚠ Sandbox lost for ${userEmail}, running final backup…`));
+                await this.backupFiles(userEmail).catch(() => {});
                 this._clearKeepalive(userEmail);
+                this._clearAutoBackup(userEmail);
                 await this.col.updateOne({ userEmail }, { $set: { status: 'dead' } });
             }
         }, 60_000);
@@ -458,7 +483,85 @@ exit 1`,
         } catch {}
     }
 
+    // ── Backup & Restore ───────────────────────────────────────────────────
+
+    async backupFiles(userEmail: string): Promise<number> {
+        try {
+            const sbx = await this._getSandbox(userEmail);
+            // List user project files (skip hidden dirs, node_modules, etc.)
+            const listResult = await sbx.commands.run(
+                `find /home/user -maxdepth 4 -type f \
+                 ! -path '*/node_modules/*' ! -path '*/.git/*' \
+                 ! -path '*/.*' ! -path '/home/user/.bashrc' \
+                 ! -path '/home/user/.profile' ! -path '/home/user/.bash_logout' \
+                 ! -name '*.log' ! -name '.context.md' \
+                 2>/dev/null | head -200`,
+                { timeoutMs: 15_000 }
+            );
+            const paths = (listResult.stdout || '').trim().split('\n').filter(Boolean);
+            if (!paths.length) return 0;
+
+            const files: { path: string; content: string }[] = [];
+            for (const p of paths) {
+                try {
+                    const content = await sbx.files.read(p);
+                    // Skip binary / very large files (>500KB)
+                    if (typeof content === 'string' && content.length < 500_000) {
+                        files.push({ path: p, content });
+                    }
+                } catch {}
+            }
+            if (!files.length) return 0;
+
+            await this.backupCol.updateOne(
+                { userEmail },
+                { $set: { userEmail, files, backedUpAt: new Date() } },
+                { upsert: true }
+            );
+            console.log(chalk.blue(`   💾 Backed up ${files.length} files for ${userEmail}`));
+            return files.length;
+        } catch (e: any) {
+            console.log(chalk.yellow(`   ⚠ Backup failed for ${userEmail}: ${e.message}`));
+            return 0;
+        }
+    }
+
+    private async _restoreFiles(userEmail: string, sbx: Sandbox): Promise<number> {
+        try {
+            const backup = await this.backupCol.findOne({ userEmail });
+            if (!backup || !backup.files.length) return 0;
+
+            for (const f of backup.files) {
+                try {
+                    // Ensure parent directory exists
+                    const dir = f.path.substring(0, f.path.lastIndexOf('/'));
+                    await sbx.commands.run(`mkdir -p '${dir}'`, { timeoutMs: 5_000 });
+                    await sbx.files.write(f.path, f.content);
+                } catch {}
+            }
+            console.log(chalk.green(`   ♻ Restored ${backup.files.length} files for ${userEmail}`));
+            return backup.files.length;
+        } catch {
+            return 0;
+        }
+    }
+
+    private _startAutoBackup(userEmail: string): void {
+        this._clearAutoBackup(userEmail);
+        // Backup every 10 minutes
+        const timer = setInterval(() => {
+            this.backupFiles(userEmail).catch(() => {});
+        }, 10 * 60 * 1000);
+        this.backupTimers.set(userEmail, timer);
+    }
+
+    private _clearAutoBackup(userEmail: string): void {
+        const t = this.backupTimers.get(userEmail);
+        if (t) { clearInterval(t); this.backupTimers.delete(userEmail); }
+    }
+
     shutdown(): void {
         for (const [email] of this.keepaliveTimers) this._clearKeepalive(email);
+        for (const [email] of this.backupTimers) this._clearAutoBackup(email);
     }
 }
