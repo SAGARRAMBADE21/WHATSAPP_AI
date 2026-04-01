@@ -43,11 +43,11 @@ body {
 }
 .back-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
 .sound-toggle {
-    background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25);
-    color: #8B5CF6; padding: 6px 12px; border-radius: 8px;
+    background: rgba(255,106,47,0.1); border: 1px solid rgba(255,106,47,0.25);
+    color: #FF6A2F; padding: 6px 12px; border-radius: 8px;
     cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s;
 }
-.sound-toggle:hover { background: rgba(139,92,246,0.2); }
+.sound-toggle:hover { background: rgba(255,106,47,0.2); }
 .sound-toggle.muted { opacity: 0.4; }
 
 /* ── Chat Container ── */
@@ -88,10 +88,10 @@ body {
 }
 .welcome-icon {
     width: 72px; height: 72px; border-radius: 20px;
-    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    background: linear-gradient(135deg, #FF6A2F, #FF3D00);
     display: flex; align-items: center; justify-content: center;
-    font-size: 32px;
-    box-shadow: 0 8px 40px rgba(139,92,246,0.3);
+    font-size: 32px; font-weight: 800; color: #fff;
+    box-shadow: 0 8px 40px rgba(255,106,47,0.3);
     animation: float 3s ease-in-out infinite;
 }
 @keyframes float {
@@ -111,9 +111,9 @@ body {
     cursor: pointer; font-size: 13px; transition: 0.2s;
 }
 .suggestion:hover {
-    background: rgba(139,92,246,0.1);
-    border-color: rgba(139,92,246,0.3);
-    color: #8B5CF6;
+    background: rgba(255,106,47,0.1);
+    border-color: rgba(255,106,47,0.3);
+    color: #FF6A2F;
 }
 
 /* ── Message Bubbles ── */
@@ -128,14 +128,14 @@ body {
 .msg-avatar {
     width: 32px; height: 32px; border-radius: 10px;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px; flex-shrink: 0;
+    font-size: 14px; flex-shrink: 0; color: #fff; font-weight: 700;
 }
 .msg.ai .msg-avatar {
-    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    background: linear-gradient(135deg, #FF6A2F, #FF3D00);
 }
 .msg.user .msg-avatar {
     background: linear-gradient(135deg, #4285F4, #34A853);
-    font-weight: 700; font-size: 12px; color: #fff;
+    font-size: 12px;
 }
 
 .msg-bubble {
@@ -147,8 +147,8 @@ body {
     word-break: break-word;
 }
 .msg.user .msg-bubble {
-    background: linear-gradient(135deg, rgba(139,92,246,0.2), rgba(109,40,217,0.15));
-    border: 1px solid rgba(139,92,246,0.2);
+    background: linear-gradient(135deg, rgba(255,106,47,0.15), rgba(255,61,0,0.1));
+    border: 1px solid rgba(255,106,47,0.2);
     border-bottom-right-radius: 4px;
 }
 .msg.ai .msg-bubble {
@@ -189,7 +189,7 @@ body {
 }
 .typing-dot {
     width: 8px; height: 8px; border-radius: 50%;
-    background: #8B5CF6;
+    background: #FF6A2F;
     animation: typingBounce 1.4s infinite ease-in-out;
 }
 .typing-dot:nth-child(2) { animation-delay: 0.16s; }
@@ -222,8 +222,8 @@ body {
     align-items: flex-end;
 }
 .input-wrap:focus-within {
-    border-color: rgba(139,92,246,0.5);
-    box-shadow: 0 0 0 3px rgba(139,92,246,0.1);
+    border-color: rgba(255,106,47,0.5);
+    box-shadow: 0 0 0 3px rgba(255,106,47,0.1);
 }
 #chat-input {
     flex: 1;
@@ -238,30 +238,17 @@ body {
 .send-btn {
     width: 46px; height: 46px;
     border-radius: 14px;
-    background: linear-gradient(135deg, #8B5CF6, #6D28D9);
+    background: linear-gradient(135deg, #FF6A2F, #FF3D00);
     border: none;
     cursor: pointer;
     display: flex; align-items: center; justify-content: center;
     transition: 0.2s;
     flex-shrink: 0;
 }
-.send-btn:hover { transform: scale(1.05); box-shadow: 0 4px 20px rgba(139,92,246,0.4); }
+.send-btn:hover { transform: scale(1.05); box-shadow: 0 4px 20px rgba(255,106,47,0.4); }
 .send-btn:active { transform: scale(0.95); }
 .send-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
 .send-btn svg { width: 20px; height: 20px; fill: #fff; }
-
-/* ── Ripple effect on send ── */
-.ripple {
-    position: fixed;
-    width: 20px; height: 20px;
-    border-radius: 50%;
-    background: rgba(139,92,246,0.3);
-    pointer-events: none;
-    animation: rippleOut 0.6s ease-out forwards;
-}
-@keyframes rippleOut {
-    to { width: 200px; height: 200px; opacity: 0; margin-left: -100px; margin-top: -100px; }
-}
 
 /* ── Responsive ── */
 @media (max-width: 640px) {
@@ -300,7 +287,7 @@ body {
             </div>
         </div>
         <div class="typing" id="typing">
-            <div class="msg-avatar" style="background:linear-gradient(135deg,#8B5CF6,#6D28D9)">AI</div>
+            <div class="msg-avatar" style="background:linear-gradient(135deg,#FF6A2F,#FF3D00);color:#fff;font-weight:700">AI</div>
             <div class="typing-dots">
                 <div class="typing-dot"></div>
                 <div class="typing-dot"></div>
@@ -332,71 +319,100 @@ if (!token) window.location.href = '/login.html';
 const H = { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' };
 document.getElementById('back-btn').href = '/dashboard.html?token=' + token;
 
-// ── Sound System ──
-const AudioCtx = window.AudioContext || window.webkitAudioContext;
-let audioCtx;
+// ── Sound System (Web Audio API) ──
+let audioCtx = null;
 let soundEnabled = true;
 
-function ensureAudio() {
-    if (!audioCtx) audioCtx = new AudioCtx();
-    if (audioCtx.state === 'suspended') audioCtx.resume();
+function initAudio() {
+    if (audioCtx) return;
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // Unlock on iOS/Chrome by playing a silent buffer
+        const buf = audioCtx.createBuffer(1, 1, 22050);
+        const src = audioCtx.createBufferSource();
+        src.buffer = buf;
+        src.connect(audioCtx.destination);
+        src.start(0);
+    } catch(e) {
+        console.warn('Audio init failed:', e);
+    }
 }
 
-function playTone(freq, dur, type = 'sine', vol = 0.12) {
-    if (!soundEnabled) return;
-    ensureAudio();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    gain.gain.setValueAtTime(vol, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + dur);
+// Init audio on ANY user interaction (required by browsers)
+['click', 'touchstart', 'keydown'].forEach(evt => {
+    document.addEventListener(evt, function unlock() {
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+        document.removeEventListener(evt, unlock);
+    }, { once: true });
+});
+
+function playTone(freq, dur, type, vol) {
+    if (!soundEnabled || !audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    try {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type || 'sine';
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol || 0.3, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(audioCtx.currentTime);
+        osc.stop(audioCtx.currentTime + dur);
+    } catch(e) {}
 }
 
 function playSendSound() {
-    playTone(880, 0.08, 'sine', 0.1);
-    setTimeout(() => playTone(1100, 0.1, 'sine', 0.08), 60);
+    playTone(784, 0.1, 'sine', 0.25);
+    setTimeout(() => playTone(1047, 0.12, 'sine', 0.2), 70);
 }
 
 function playReceiveSound() {
-    playTone(660, 0.1, 'triangle', 0.1);
-    setTimeout(() => playTone(880, 0.12, 'triangle', 0.08), 80);
-    setTimeout(() => playTone(1047, 0.15, 'triangle', 0.06), 160);
+    playTone(523, 0.1, 'triangle', 0.25);
+    setTimeout(() => playTone(659, 0.12, 'triangle', 0.2), 100);
+    setTimeout(() => playTone(784, 0.15, 'triangle', 0.15), 200);
 }
 
 function playErrorSound() {
-    playTone(330, 0.15, 'sawtooth', 0.08);
-    setTimeout(() => playTone(260, 0.2, 'sawtooth', 0.06), 120);
+    playTone(330, 0.2, 'sawtooth', 0.15);
+    setTimeout(() => playTone(220, 0.25, 'sawtooth', 0.12), 150);
 }
 
 function playTypingSound() {
-    if (!soundEnabled) return;
-    ensureAudio();
-    const bufferSize = audioCtx.sampleRate * 0.03;
-    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.02;
-    const src = audioCtx.createBufferSource();
-    const gain = audioCtx.createGain();
-    src.buffer = buffer;
-    gain.gain.setValueAtTime(0.04, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.03);
-    src.connect(gain);
-    gain.connect(audioCtx.destination);
-    src.start();
+    if (!soundEnabled || !audioCtx) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    try {
+        const bufferSize = Math.floor(audioCtx.sampleRate * 0.02);
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.15;
+        const src = audioCtx.createBufferSource();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'highpass';
+        filter.frequency.value = 800;
+        src.buffer = buffer;
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.02);
+        src.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioCtx.destination);
+        src.start();
+    } catch(e) {}
 }
 
 // Toggle sound
 const soundBtn = document.getElementById('sound-toggle');
 soundBtn.addEventListener('click', () => {
+    initAudio();
     soundEnabled = !soundEnabled;
     soundBtn.textContent = soundEnabled ? 'Sound: ON' : 'Sound: OFF';
     soundBtn.classList.toggle('muted', !soundEnabled);
-    if (soundEnabled) playTone(880, 0.05, 'sine', 0.06);
+    if (soundEnabled) {
+        playTone(880, 0.08, 'sine', 0.2);
+    }
 });
 
 // ── Chat Logic ──
@@ -405,7 +421,6 @@ const welcomeEl = document.getElementById('welcome');
 const typingEl = document.getElementById('typing');
 const input = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
-let chatHistory = [];
 
 // Auto-resize textarea
 input.addEventListener('input', () => {
@@ -425,11 +440,13 @@ input.addEventListener('keydown', (e) => {
 sendBtn.addEventListener('click', sendMessage);
 
 function useSuggestion(el) {
+    initAudio();
     input.value = el.textContent;
     input.style.height = 'auto';
     input.style.height = input.scrollHeight + 'px';
     sendBtn.disabled = false;
     input.focus();
+    playTone(660, 0.06, 'sine', 0.15);
 }
 
 function timeStr() {
@@ -437,7 +454,7 @@ function timeStr() {
 }
 
 function addMessage(text, role) {
-    if (welcomeEl) welcomeEl.remove();
+    if (welcomeEl && welcomeEl.parentNode) welcomeEl.remove();
 
     const div = document.createElement('div');
     div.className = `msg ${role}`;
@@ -447,7 +464,7 @@ function addMessage(text, role) {
     div.innerHTML = `
         <div class="msg-avatar">${avatarContent}</div>
         <div>
-            <div class="msg-bubble">${escapeHtml(text)}</div>
+            <div class="msg-bubble">${formatMessage(text)}</div>
             <div class="msg-time">${timeStr()}</div>
         </div>
     `;
@@ -456,21 +473,22 @@ function addMessage(text, role) {
     return div;
 }
 
-function escapeHtml(text) {
+function formatMessage(text) {
     return text
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
+        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/```([\s\S]*?)```/g, '<pre>$1</pre>');
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
 }
 
 async function sendMessage() {
     const text = input.value.trim();
     if (!text) return;
 
+    initAudio();
     input.value = '';
     input.style.height = 'auto';
     sendBtn.disabled = true;
