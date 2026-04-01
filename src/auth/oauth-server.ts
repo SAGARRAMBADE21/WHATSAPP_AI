@@ -6,6 +6,10 @@ import { Server as SocketIOServer } from 'socket.io';
 import { UserManager } from './user-manager';
 import { MemOSStore } from '../memory/memos-store';
 import { E2BSandboxManager } from '../sandbox/e2b-manager';
+import { NLPEngine } from '../nlp/engine';
+import { MemoryManager } from '../memory/manager';
+import { ToolRegistry } from '../tools/registry';
+import { AgentCore } from '../agent/core';
 import chalk from 'chalk';
 import jwt from 'jsonwebtoken';
 
@@ -34,6 +38,7 @@ export class OAuthCallbackServer {
     private userManager: UserManager;
     private memosStore: MemOSStore | null = null;
     private sandboxManager: E2BSandboxManager | null = null;
+    private agent: AgentCore | null = null;
     private port: number = 3000;
 
     constructor(userManager: UserManager, port?: number, memosStore?: MemOSStore, sandboxManager?: E2BSandboxManager) {
@@ -41,6 +46,10 @@ export class OAuthCallbackServer {
         if (port) this.port = port;
         if (memosStore) this.memosStore = memosStore;
         if (sandboxManager) this.sandboxManager = sandboxManager;
+    }
+
+    setAgent(agent: AgentCore): void {
+        this.agent = agent;
     }
 
     async start(): Promise<void> {
@@ -263,6 +272,33 @@ export class OAuthCallbackServer {
                                 await sbx.kill(email);
                                 res.writeHead(200);
                                 return res.end(JSON.stringify({ success: true }));
+                            }
+                        }
+
+                        // ── Chat API ──────────────────────────────────────────────
+                        if (req.method === 'POST' && url.pathname === '/api/chat') {
+                            const email = getAuthenticatedUser();
+                            if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                            if (!this.agent) { res.writeHead(503); return res.end(JSON.stringify({ error: 'Agent not ready' })); }
+                            const body = await parseBody();
+                            const message = body.message?.trim();
+                            if (!message) { res.writeHead(400); return res.end(JSON.stringify({ error: 'message is required' })); }
+
+                            // Find the user's linked phone number to route through AgentCore
+                            const user = await this.userManager.getUserByEmail(email);
+                            const phone = user?.phone_number;
+                            if (!phone) { res.writeHead(400); return res.end(JSON.stringify({ error: 'No WhatsApp linked. Please link your WhatsApp from the Dashboard first.' })); }
+
+                            try {
+                                const reply = await this.agent.handleMessage(
+                                    { senderId: `web_${email}`, senderName: email.split('@')[0], text: message },
+                                    phone
+                                );
+                                res.writeHead(200);
+                                return res.end(JSON.stringify({ success: true, reply }));
+                            } catch (e: any) {
+                                res.writeHead(500);
+                                return res.end(JSON.stringify({ error: e.message || 'Agent error' }));
                             }
                         }
 

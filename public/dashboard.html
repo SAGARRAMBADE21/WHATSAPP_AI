@@ -49,6 +49,12 @@
             cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s;
         }
         .sandbox-btn:hover { background: rgba(255,106,47,0.2); border-color: rgba(255,106,47,0.5); }
+        .ai-chat-btn {
+            background: rgba(139,92,246,0.1); border: 1px solid rgba(139,92,246,0.25);
+            color: #8B5CF6; padding: 6px 14px; border-radius: 8px;
+            cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s;
+        }
+        .ai-chat-btn:hover { background: rgba(139,92,246,0.2); border-color: rgba(139,92,246,0.5); }
         .memory-graph-btn {
             background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25);
             color: #10B981; padding: 6px 14px; border-radius: 8px;
@@ -186,6 +192,7 @@
                 <div class="user-avatar" id="user-avatar">?</div>
                 <span class="user-email" id="user-email-display">Loading...</span>
             </div>
+            <button class="ai-chat-btn" id="ai-chat-btn" onclick="openAIChat()">AI Chat</button>
             <button class="sandbox-btn" id="sandbox-btn" onclick="openSandbox()">Sandbox</button>
             <button class="memory-graph-btn" id="memory-graph-btn" onclick="openMemoryGraph()">Memory Graph</button>
             <button class="logout-btn" id="logout-btn">Log Out</button>
@@ -298,6 +305,10 @@
 
         let userEmail = '';
         let socket = null;
+
+        function openAIChat() {
+            window.location.href = '/chat.html?token=' + token;
+        }
 
         function openSandbox() {
             window.location.href = '/sandbox.html?token=' + token;

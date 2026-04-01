@@ -9,6 +9,7 @@ import { NLPEngine } from './nlp/engine';
 import { ToolRegistry } from './tools/registry';
 import { MemoryManager } from './memory/manager';
 import { E2BSandboxManager } from './sandbox/e2b-manager';
+import { AgentCore } from './agent/core';
 import { SessionManager } from './whatsapp/session-manager';
 import chalk from 'chalk';
 
@@ -90,7 +91,12 @@ async function main(): Promise<void> {
     console.log(chalk.bold('🔐 Starting Server + OAuth'));
     console.log(chalk.gray('   Setting up HTTP server, Socket.IO, and OAuth...\n'));
 
+    // Create a shared AgentCore for the web chat interface
+    const webAgent = new AgentCore(nlpEngine, toolRegistry, memoryManager, userManager, sandboxManager);
+    console.log(chalk.gray('   ▸ Web Chat Agent') + chalk.green(' ✓'));
+
     const oauthServer = new OAuthCallbackServer(userManager, undefined, memoryManager.memosStore, sandboxManager);
+    oauthServer.setAgent(webAgent);
     try {
         await oauthServer.start();
         console.log(chalk.green('   ✓ Server ready'));
