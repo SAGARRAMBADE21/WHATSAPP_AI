@@ -172,6 +172,14 @@ export class AgentCore {
                         success: result.success,
                         summary: result.message,
                     });
+                    if (userDoc?.email) {
+                        await this.memory.memosStore.storeEpisodic(
+                            userDoc.email,
+                            `sandbox_run_command: ${result.message?.slice(0, 200) || 'executed'}`,
+                            'orchestrator',
+                            { tags: ['sandbox_run_command'], importance: 'medium' }
+                        );
+                    }
                     const response = result.message || 'Command executed.';
                     this.memory.addConversationTurn(userId, 'assistant', response);
                     return response;
@@ -238,6 +246,19 @@ export class AgentCore {
                     success: result.success,
                     summary: result.message,
                 });
+
+                // Also record in MemOS store so Memory Graph displays it
+                if (userDoc?.email) {
+                    const toolPrefix = toolCall.tool_name.split('_')[0] as any;
+                    const validSources = ['gmail', 'calendar', 'drive', 'sheets', 'docs', 'classroom', 'manus', 'v0'];
+                    const sourceTool = validSources.includes(toolPrefix) ? toolPrefix : 'orchestrator';
+                    await this.memory.memosStore.storeEpisodic(
+                        userDoc.email,
+                        `${toolCall.tool_name}: ${result.success ? result.message?.slice(0, 200) : 'Failed — ' + (result.error || result.message)?.slice(0, 200)}`,
+                        sourceTool,
+                        { tags: [toolCall.tool_name, ...Object.keys(toolCall.parameters)], importance: result.success ? 'medium' : 'high' }
+                    );
+                }
 
                 // Track frequently used contacts
                 if (toolCall.parameters.to) {
