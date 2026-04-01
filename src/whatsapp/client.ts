@@ -43,7 +43,7 @@ export class WhatsAppClient {
             auth: state,
             logger: this.logger,
             printQRInTerminal: false,  // We'll handle QR display ourselves
-            browser: ['Workspace Navigator', 'Chrome', '120.0'],
+            browser: ['ChatFuse', 'Chrome', '120.0'],
             generateHighQualityLinkPreview: false,
             retryRequestDelayMs: 250,
         });
@@ -205,7 +205,7 @@ export class WhatsAppClient {
             if (cleanText.toLowerCase().startsWith('/register')) {
                 console.log(chalk.magenta(`[DEBUG] Handling /register command for ${phoneNumber}`));
                 try {
-                    const response = `🔐 *Workspace Navigator Security*\n\n` +
+                    const response = `🔐 *ChatFuse Security*\n\n` +
                         `We have upgraded to a secure web dashboard.\n\n` +
                         `To connect your Google Workspace:\n` +
                         `1. Open your computer browser\n` +

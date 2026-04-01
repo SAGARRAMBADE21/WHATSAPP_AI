@@ -1,4 +1,4 @@
-# Workspace Navigator
+# ChatFuse
 
 ## What Is It
 An AI-powered assistant that lets you control your entire Google Workspace through WhatsApp messages using natural language.

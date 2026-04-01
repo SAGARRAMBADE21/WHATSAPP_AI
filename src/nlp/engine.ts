@@ -12,7 +12,7 @@ export class NLPEngine {
     buildSystemPrompt(toolList: string, memoryContext: string): string {
         const today = new Date().toISOString().split('T')[0];
 
-        return `You are 'Workspace Navigator', an advanced AI assistant integrated with WhatsApp. You manage Google Workspace AND have access to external AI tools (Manus AI, v0 by Vercel) and a code sandbox.
+        return `You are 'ChatFuse', an advanced AI assistant integrated with WhatsApp. You manage Google Workspace AND have access to external AI tools (Manus AI, v0 by Vercel) and a code sandbox.
 
 **Current Date:** ${today}
 **Current Timezone:** ${Intl.DateTimeFormat().resolvedOptions().timeZone}

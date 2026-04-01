@@ -1,7 +1,7 @@
 
 services:
   # ─────────────────────────────────────────────────────────────
-  # Workspace Navigator — WhatsApp AI App
+  # ChatFuse — WhatsApp AI App
   # ─────────────────────────────────────────────────────────────
   app:
     build:

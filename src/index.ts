@@ -19,7 +19,7 @@ async function main(): Promise<void> {
     // Stylish banner
     console.log(chalk.bold.cyan('\n╔═════════════════════════════════════════════════════════╗'));
     console.log(chalk.bold.cyan('║') + chalk.bold.white('                                                         ') + chalk.bold.cyan('║'));
-    console.log(chalk.bold.cyan('║') + chalk.bold.magenta('   🚀 Workspace Navigator') + chalk.bold.yellow(' (Multi-User)') + '              ' + chalk.bold.cyan('║'));
+    console.log(chalk.bold.cyan('║') + chalk.bold.magenta('   🚀 ChatFuse') + chalk.bold.yellow(' (Multi-User)') + '              ' + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + chalk.gray('   AI Assistant for Google Workspace via WhatsApp        ') + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('║') + chalk.bold.white('                                                         ') + chalk.bold.cyan('║'));
     console.log(chalk.bold.cyan('╚═════════════════════════════════════════════════════════╝'));

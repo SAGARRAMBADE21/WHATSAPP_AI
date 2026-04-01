@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# deploy.sh — Workspace Navigator AWS EC2 Setup & Deploy Script
+# deploy.sh — ChatFuse AWS EC2 Setup & Deploy Script
 #
 # Run this ONCE on a fresh Ubuntu 22.04 EC2 instance.
 # After this script, the app will be running behind Nginx on port 443 (HTTPS).

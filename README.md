@@ -1,8 +1,8 @@
-# Workspace Navigator
+# ChatFuse
 
 **AI-Powered Google Workspace Assistant via WhatsApp — with Cloud Sandbox & Memory**
 
-Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets, Docs, Classroom) through natural language WhatsApp messages — no app switching, no browser needed. Workspace Navigator is a multi-user AI agent that combines:
+Control your entire Google Workspace (Gmail, Calendar, Drive, Sheets, Docs, Classroom) through natural language WhatsApp messages — no app switching, no browser needed. ChatFuse is a multi-user AI agent that combines:
 
 - **Google Workspace control** — Gmail, Calendar, Drive, Sheets, Docs, Classroom via 55+ tools
 - **Manus AI integration** — delegate cloud tasks, run shell commands, take desktop screenshots, all from WhatsApp

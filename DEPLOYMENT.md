@@ -1,6 +1,6 @@
-# Workspace Navigator — Full EC2 Deployment Guide
+# ChatFuse — Full EC2 Deployment Guide
 
-> Complete step-by-step guide to deploy the WhatsApp AI Workspace Navigator on AWS EC2 with a custom domain and SSL.
+> Complete step-by-step guide to deploy the WhatsApp AI ChatFuse on AWS EC2 with a custom domain and SSL.
 
 ---
 
@@ -658,7 +658,7 @@ User Browser / Phone
         │
         ▼
    Docker Container (port 3000)
-   ├── Node.js App (Workspace Navigator)
+   ├── Node.js App (ChatFuse)
    ├── WhatsApp (Baileys) ── WebSocket to WhatsApp servers
    ├── Socket.IO ── Real-time dashboard updates
    └── MongoDB Atlas ── User data, sessions, memory

@@ -1,6 +1,6 @@
 # AWS Deployment Guide — WhatsApp AI Assistant
 
-This guide deploys the **Workspace Navigator** app to a single AWS EC2 instance using Docker Compose.
+This guide deploys the **ChatFuse** app to a single AWS EC2 instance using Docker Compose.
 
 ---
 
