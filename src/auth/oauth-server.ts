@@ -10,8 +10,16 @@ import { NLPEngine } from '../nlp/engine';
 import { MemoryManager } from '../memory/manager';
 import { ToolRegistry } from '../tools/registry';
 import { AgentCore } from '../agent/core';
+import { Db, Collection } from 'mongodb';
 import chalk from 'chalk';
 import jwt from 'jsonwebtoken';
+
+interface ChatMessage {
+    userEmail: string;
+    role: 'user' | 'ai';
+    text: string;
+    ts: Date;
+}
 
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-jwt-secret-do-not-use-in-prod';
 
@@ -39,6 +47,7 @@ export class OAuthCallbackServer {
     private memosStore: MemOSStore | null = null;
     private sandboxManager: E2BSandboxManager | null = null;
     private agent: AgentCore | null = null;
+    private chatCol: Collection<ChatMessage> | null = null;
     private port: number = 3000;
 
     constructor(userManager: UserManager, port?: number, memosStore?: MemOSStore, sandboxManager?: E2BSandboxManager) {
@@ -50,6 +59,11 @@ export class OAuthCallbackServer {
 
     setAgent(agent: AgentCore): void {
         this.agent = agent;
+    }
+
+    async initChatStore(db: Db): Promise<void> {
+        this.chatCol = db.collection<ChatMessage>('chat_messages');
+        await this.chatCol.createIndex({ userEmail: 1, ts: 1 });
     }
 
     async start(): Promise<void> {
@@ -276,6 +290,29 @@ export class OAuthCallbackServer {
                         }
 
                         // ── Chat API ──────────────────────────────────────────────
+
+                        // GET /api/chat/history — load chat history for current user
+                        if (req.method === 'GET' && url.pathname === '/api/chat/history') {
+                            const email = getAuthenticatedUser();
+                            if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                            if (!this.chatCol) { res.writeHead(200); return res.end(JSON.stringify({ messages: [] })); }
+                            const limit = parseInt(url.searchParams.get('limit') ?? '100');
+                            const msgs = await this.chatCol.find({ userEmail: email }).sort({ ts: -1 }).limit(limit).toArray();
+                            msgs.reverse();
+                            res.writeHead(200);
+                            return res.end(JSON.stringify({ messages: msgs.map(m => ({ role: m.role, text: m.text, ts: m.ts })) }));
+                        }
+
+                        // DELETE /api/chat/history — clear chat history for current user
+                        if (req.method === 'DELETE' && url.pathname === '/api/chat/history') {
+                            const email = getAuthenticatedUser();
+                            if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
+                            if (this.chatCol) await this.chatCol.deleteMany({ userEmail: email });
+                            res.writeHead(200);
+                            return res.end(JSON.stringify({ success: true }));
+                        }
+
+                        // POST /api/chat — send message and get AI reply
                         if (req.method === 'POST' && url.pathname === '/api/chat') {
                             const email = getAuthenticatedUser();
                             if (!email) { res.writeHead(401); return res.end(JSON.stringify({ error: 'Unauthorized' })); }
@@ -289,11 +326,16 @@ export class OAuthCallbackServer {
                             const phone = user?.phone_number;
                             if (!phone) { res.writeHead(400); return res.end(JSON.stringify({ error: 'No WhatsApp linked. Please link your WhatsApp from the Dashboard first.' })); }
 
+                            // Save user message
+                            if (this.chatCol) await this.chatCol.insertOne({ userEmail: email, role: 'user', text: message, ts: new Date() });
+
                             try {
                                 const reply = await this.agent.handleMessage(
                                     { senderId: `web_${email}`, senderName: email.split('@')[0], text: message },
                                     phone
                                 );
+                                // Save AI reply
+                                if (this.chatCol) await this.chatCol.insertOne({ userEmail: email, role: 'ai', text: reply, ts: new Date() });
                                 res.writeHead(200);
                                 return res.end(JSON.stringify({ success: true, reply }));
                             } catch (e: any) {

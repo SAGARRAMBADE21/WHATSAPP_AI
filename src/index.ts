@@ -97,6 +97,7 @@ async function main(): Promise<void> {
 
     const oauthServer = new OAuthCallbackServer(userManager, undefined, memoryManager.memosStore, sandboxManager);
     oauthServer.setAgent(webAgent);
+    await oauthServer.initChatStore(userManager.getDb());
     try {
         await oauthServer.start();
         console.log(chalk.green('   ✓ Server ready'));

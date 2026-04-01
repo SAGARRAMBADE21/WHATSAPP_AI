@@ -49,6 +49,12 @@ body {
 }
 .sound-toggle:hover { background: rgba(255,106,47,0.2); }
 .sound-toggle.muted { opacity: 0.4; }
+.clear-btn {
+    background: rgba(255,75,75,0.08); border: 1px solid rgba(255,75,75,0.2);
+    color: #ff4b4b; padding: 6px 12px; border-radius: 8px;
+    cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s;
+}
+.clear-btn:hover { background: rgba(255,75,75,0.15); }
 
 /* ── Chat Container ── */
 .chat-container {
@@ -268,6 +274,7 @@ body {
         </div>
         <div class="topbar-right">
             <button class="sound-toggle" id="sound-toggle" title="Toggle sound effects">Sound: ON</button>
+            <button class="clear-btn" id="clear-btn" title="Clear chat history">Clear Chat</button>
             <a class="back-btn" id="back-btn" href="/dashboard.html">← Dashboard</a>
         </div>
     </div>
@@ -524,6 +531,56 @@ async function sendMessage() {
 
     messagesEl.scrollTop = messagesEl.scrollHeight;
 }
+
+// ── Load chat history from server ──
+async function loadHistory() {
+    try {
+        const resp = await fetch('/api/chat/history?limit=100', { headers: H });
+        const data = await resp.json();
+        if (data.messages && data.messages.length > 0) {
+            if (welcomeEl && welcomeEl.parentNode) welcomeEl.remove();
+            for (const msg of data.messages) {
+                const div = document.createElement('div');
+                div.className = `msg ${msg.role === 'user' ? 'user' : 'ai'}`;
+                const avatarContent = msg.role === 'ai' ? 'AI' : (localStorage.getItem('navigator_last_email') || '?')[0].toUpperCase();
+                const t = new Date(msg.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                div.innerHTML = `
+                    <div class="msg-avatar">${avatarContent}</div>
+                    <div>
+                        <div class="msg-bubble">${formatMessage(msg.text)}</div>
+                        <div class="msg-time">${t}</div>
+                    </div>
+                `;
+                messagesEl.appendChild(div);
+            }
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+    } catch(e) {}
+}
+loadHistory();
+
+// ── Clear chat ──
+document.getElementById('clear-btn').addEventListener('click', async () => {
+    if (!confirm('Clear all chat history?')) return;
+    try {
+        await fetch('/api/chat/history', { method: 'DELETE', headers: H });
+    } catch(e) {}
+    messagesEl.innerHTML = '';
+    // Re-add welcome
+    messagesEl.innerHTML = `
+        <div class="welcome" id="welcome">
+            <div class="welcome-icon">AI</div>
+            <h2>ChatFuse AI Assistant</h2>
+            <p>Chat with your AI assistant directly. Manage Gmail, Calendar, Drive, Sheets, Docs — all from here.</p>
+            <div class="suggestions">
+                <div class="suggestion" onclick="useSuggestion(this)">Show my latest 5 emails</div>
+                <div class="suggestion" onclick="useSuggestion(this)">What's on my calendar today?</div>
+                <div class="suggestion" onclick="useSuggestion(this)">List files in my Drive</div>
+                <div class="suggestion" onclick="useSuggestion(this)">Create a new document</div>
+            </div>
+        </div>
+    `;
+});
 
 // Focus input on load
 input.focus();
